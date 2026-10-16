@@ -1,0 +1,15 @@
+{
+  "name": "weather-alert",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "기상청 API 기반 아침 날씨 알림 (텔레그램)",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "send": "node --env-file-if-exists=.env send-weather.js",
+    "dry": "node --env-file-if-exists=.env send-weather.js --dry-run",
+    "test": "node --test"
+  }
+}
