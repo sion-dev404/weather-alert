@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘의 날씨</title>
+<style>
+  :root {
+    --bg1: #1e3a5f; --bg2: #0f1b2d; --card: rgba(255,255,255,.09); --line: rgba(255,255,255,.14);
+    --text: #f2f6fb; --sub: #b8c6d9; --accent: #7cc4ff; --warm: #ffb86b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 40px; }
+  .hero { text-align: center; padding: 24px 0 28px; }
+  .loc { color: var(--sub); font-size: 15px; }
+  .temp { font-size: 112px; font-weight: 200; line-height: 1; margin: 8px 0; letter-spacing: -4px; }
+  .cond { font-size: 22px; }
+  .range { color: var(--sub); margin-top: 6px; font-size: 16px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 16px; }
+  h2 { margin: 0 0 12px; font-size: 14px; color: var(--sub); font-weight: 600; }
+  .hourly { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .h { flex: 0 0 56px; text-align: center; }
+  .h .t { font-size: 13px; color: var(--sub); }
+  .h .i { font-size: 24px; margin: 6px 0; }
+  .h .d { font-size: 17px; font-weight: 600; }
+  .h .p { font-size: 11px; color: var(--accent); min-height: 14px; margin-top: 2px; }
+  .day { display: grid; grid-template-columns: 52px 1fr auto 76px; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .day:first-of-type { border-top: 0; }
+  .day .n { font-weight: 600; }
+  .day .n small { display: block; color: var(--sub); font-weight: 400; font-size: 12px; }
+  .day .w { font-size: 20px; }
+  .day .w small { font-size: 12px; color: var(--sub); margin-left: 6px; }
+  .day .r { font-size: 12px; color: var(--accent); text-align: right; min-width: 36px; }
+  .day .m { text-align: right; font-variant-numeric: tabular-nums; }
+  .day .m b { color: var(--warm); font-weight: 600; }
+  .foot { text-align: center; color: var(--sub); font-size: 12px; margin-top: 20px; }
+  .err { text-align: center; padding: 60px 0; color: var(--sub); }
+</style>
+</head>
+<body>
+<main id="app"><div class="err">불러오는 중…</div></main>
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (v) => (v === null || v === undefined ? '-' : Math.round(v) + '°');
+const pop = (p) => (p === null || p === undefined ? '' : p + '%');
+const md = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`;
+
+function render(d) {
+  const cur = d.current;
+  const rng = d.today_range;
+  const today = d.today;
+  const hours = d.hourly.map((h) => `
+    <div class="h">
+      <div class="t">${h.date === today ? '' : '내일 '}${String(h.hour).padStart(2, '0')}시</div>
+      <div class="i">${h.icon}</div>
+      <div class="d">${fmt(h.temp)}</div>
+      <div class="p">${h.pop ? pop(h.pop) : ''}</div>
+    </div>`).join('');
+
+  const days = d.daily.map((x, i) => {
+    const same = x.am.text === x.pm.text;
+    return `
+    <div class="day">
+      <div class="n">${i === 0 ? '오늘' : x.dow}<small>${md(x.date)}</small></div>
+      <div class="w">${x.am.icon}${same ? '' : ' → ' + x.pm.icon}<small>${same ? x.am.text : x.am.text + ' → ' + x.pm.text}</small></div>
+      <div class="r">${pop(x.pop)}</div>
+      <div class="m">${fmt(x.tmn)} / <b>${fmt(x.tmx)}</b></div>
+    </div>`;
+  }).join('');
+
+  $('#app').innerHTML = `
+    <div class="hero">
+      <div class="loc">${d.location || '오늘의 날씨'}</div>
+      <div class="temp">${cur ? fmt(cur.temp) : '-'}</div>
+      <div class="cond">${cur ? cur.icon + ' ' + cur.text : ''}</div>
+      <div class="range">최저 ${rng ? fmt(rng.tmn) : '-'} · 최고 ${rng ? fmt(rng.tmx) : '-'}</div>
+    </div>
+    <section><h2>시간별 예보</h2><div class="hourly">${hours}</div></section>
+    <section><h2>주간 예보</h2>${days}</section>
+    <div class="foot">기상청 예보 기준 · ${d.updatedKst} 갱신</div>`;
+}
+
+fetch('weather.json', { cache: 'no-store' })
+  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(render)
+  .catch(() => { $('#app').innerHTML = '<div class="err">날씨 데이터를 불러오지 못했습니다.</div>'; });
+</script>
+</body>
+</html>

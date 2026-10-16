@@ -1,0 +1,46 @@
+name: Deploy Weather Page
+
+on:
+  schedule:
+    # 3시간마다 갱신 (UTC). 단기예보 발표(KST 02,05,08...) 직후에 맞춘다.
+    - cron: '20 */3 * * *'
+  push:
+    branches: [main]
+    paths: ['site/**', 'src/**', 'build-site.js', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build weather.json
+        run: node build-site.js
+        env:
+          KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
+          NX: ${{ secrets.NX }}
+          NY: ${{ secrets.NY }}
+          MID_LAND_REG_ID: ${{ secrets.MID_LAND_REG_ID }}
+          MID_TA_REG_ID: ${{ secrets.MID_TA_REG_ID }}
+          LOCATION_NAME: ${{ vars.LOCATION_NAME }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
