@@ -14,11 +14,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Send weather
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Send weather (웹 푸시)
         run: node send-weather.js
         env:
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
           NX: ${{ secrets.NX }}
           NY: ${{ secrets.NY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LOCATION_NAME: ${{ vars.LOCATION_NAME }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          PUSH_SUBSCRIPTION: ${{ secrets.PUSH_SUBSCRIPTION }}

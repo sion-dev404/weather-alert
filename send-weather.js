@@ -1,9 +1,9 @@
-// 아침 날씨 알림: 단기예보 → 오늘 요약 → 텔레그램 전송
+// 아침 날씨 알림: 단기예보 → 오늘 요약 → 웹 푸시 전송
 // 사용: node --env-file-if-exists=.env send-weather.js [--dry-run]
 import { fetchVilageFcst } from './src/kma.js';
 import { getLatestVilageBase, getTodayTmnBase, getTodayKst } from './src/kst.js';
-import { summarizeToday, formatMessage } from './src/summary.js';
-import { sendTelegram } from './src/telegram.js';
+import { summarizeToday, formatPush } from './src/summary.js';
+import { sendPush } from './src/push.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -14,7 +14,7 @@ function requireEnv(...names) {
 
 async function main() {
   requireEnv('KMA_SERVICE_KEY', 'NX', 'NY');
-  const { KMA_SERVICE_KEY: serviceKey, NX: nx, NY: ny } = process.env;
+  const { KMA_SERVICE_KEY: serviceKey, NX: nx, NY: ny, LOCATION_NAME } = process.env;
   const now = new Date();
   const today = getTodayKst(now);
 
@@ -34,21 +34,21 @@ async function main() {
       : [],
   ]);
 
-  const message = formatMessage(summarizeToday(items, today, tmnItems), today);
+  const message = formatPush(summarizeToday(items, today, tmnItems), today, LOCATION_NAME ?? '');
 
   if (dryRun) {
-    console.log(message);
+    console.log(`${message.title}\n${message.body}`);
     return;
   }
-  await sendTelegram(message);
-  console.log('텔레그램 전송 완료');
+  const { ok, total } = await sendPush(message);
+  console.log(`웹 푸시 전송 완료 (${ok}/${total}대)`);
 }
 
 main().catch(async (err) => {
   console.error(err.message);
   if (!dryRun) {
     try {
-      await sendTelegram(`⚠️ 날씨 알림 실패\n${err.message}`);
+      await sendPush({ title: '⚠️ 날씨 알림 실패', body: err.message });
     } catch (e) {
       console.error(`실패 알림도 전송하지 못했습니다: ${e.message}`);
     }

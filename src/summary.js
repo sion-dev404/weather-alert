@@ -89,6 +89,25 @@ export function summarizeToday(items, today, tmnItems = []) {
 const skyLabel = (code) => (SKY[code] ? `${SKY[code].emoji} ${SKY[code].text}` : '-');
 const popLabel = (p) => (p === null ? '-' : `${p}%`);
 
+/** 알림창용 짧은 형식: 제목 한 줄 + 본문 두세 줄 */
+export function formatPush(s, today, location = '') {
+  const m = Number(today.slice(4, 6));
+  const d = Number(today.slice(6, 8));
+  const sky = (code) => SKY[code]?.text ?? '-';
+  const skyText = s.skyAm === s.skyPm ? sky(s.skyAm) : `${sky(s.skyAm)} → ${sky(s.skyPm)}`;
+  const emoji = SKY[s.skyAm]?.emoji ?? '';
+  const title = `${emoji} ${location ? location + ' ' : ''}${skyText} · ${fmtTemp(s.tmn)} / ${fmtTemp(s.tmx)}`.trim();
+
+  const lines = [`${m}월 ${d}일 강수확률 오전 ${popLabel(s.popAm)} · 오후 ${popLabel(s.popPm)}`];
+  if (s.hourlyTemps.length) {
+    lines.push(s.hourlyTemps.map((t) => `${t.hour}시 ${fmtTemp(t.temp)}`).join(' · '));
+  }
+  if (s.ptyCodes.length) {
+    lines.push(`☂️ ${s.ptyCodes.map((c) => PTY[c].text).join('·')} 예보가 있어요. 우산 챙기세요!`);
+  }
+  return { title, body: lines.join('\n') };
+}
+
 export function formatMessage(s, today) {
   const m = Number(today.slice(4, 6));
   const d = Number(today.slice(6, 8));
