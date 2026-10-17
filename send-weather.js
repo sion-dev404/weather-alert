@@ -1,13 +1,16 @@
-// 아침 날씨 알림: 등록된 기기를 동네(격자)별로 묶어 → 동네마다 단기예보 → 오늘 요약 → 웹 푸시 전송
-// 사용: node --env-file-if-exists=.env send-weather.js [--dry-run]
+// 아침 날씨 알림: 등록된 기기를 동네(격자)별로 묶어 → 동네마다 단기예보 → 오늘 요약
+// → 매우 덥거나·춥거나·비/눈이 오는 동네에만 웹 푸시 전송 (기준: src/summary.js 의 ALERT)
+// 사용: node --env-file-if-exists=.env send-weather.js [--dry-run] [--always]
+//   --always: 조건과 관계없이 모든 동네에 보낸다 (시험용)
 import { getTodayKst } from './src/kst.js';
-import { summarizeToday, formatPush } from './src/summary.js';
+import { summarizeToday, formatPush, alertReasons } from './src/summary.js';
 import { sendPush, sendToTargets } from './src/push.js';
 import { loadLocation } from './src/location.js';
 import { fetchShort } from './src/fetchers.js';
 import { loadSubscriptions, groupByLocation, removeExpired } from './src/subs.js';
 
 const dryRun = process.argv.includes('--dry-run');
+const always = process.argv.includes('--always');
 
 function requireEnv(...names) {
   const missing = names.filter((n) => !process.env[n]);
@@ -26,7 +29,7 @@ async function main() {
   // 미리보기인데 기기가 없으면 기본 위치 하나만 보여 준다
   const groups = targets.length ? groupByLocation(targets, owner) : [{ loc: owner, targets: [] }];
 
-  let ok = 0, total = 0, failedAreas = 0;
+  let ok = 0, total = 0, failedAreas = 0, quiet = 0;
   const expired = [];
   for (const g of groups) {
     let summary;
@@ -39,6 +42,13 @@ async function main() {
       console.warn(`격자 ${g.loc.nx},${g.loc.ny} 예보 실패 (기기 ${g.targets.length}대): ${e.message}`);
       continue;
     }
+    // 매우 덥거나·춥거나·비/눈이 오는 날만 보낸다
+    const reasons = alertReasons(summary);
+    if (!reasons.length && !always) {
+      quiet += g.targets.length;
+      console.log(`격자 ${g.loc.nx},${g.loc.ny}: 알릴 날씨 없음 (최저 ${summary.tmn}° / 최고 ${summary.tmx}°, 비·눈 없음) → 기기 ${g.targets.length}대 건너뜀`);
+      continue;
+    }
     // 같은 격자라도 기기마다 자기 동 이름으로 제목을 단다
     const byName = new Map();
     for (const t of g.targets.length ? g.targets : [{ loc: null }]) {
@@ -47,7 +57,7 @@ async function main() {
       if (t.sub) byName.get(name).push(t);
     }
     for (const [name, list] of byName) {
-      const message = formatPush(summary, today, name);
+      const message = formatPush(summary, today, name, reasons);
       if (dryRun) {
         console.log(`[${list.length}대] ${message.title}\n${message.body}\n`);
         continue;
@@ -62,8 +72,9 @@ async function main() {
 
   const removed = await removeExpired(expired);
   if (removed) console.log(`만료된 구독 ${removed}개를 목록에서 지웠습니다.`);
-  console.log(`웹 푸시 전송 완료 (${ok}/${total}대, 동네 ${groups.length}곳${failedAreas ? `, 예보 실패 ${failedAreas}곳` : ''})`);
-  if (!ok) throw new Error(`모든 기기(${total}대)에 알림을 보내지 못했습니다.`);
+  console.log(`웹 푸시 전송 완료 (${ok}/${total}대, 동네 ${groups.length}곳${quiet ? `, 알릴 날씨 없어 건너뜀 ${quiet}대` : ''}${failedAreas ? `, 예보 실패 ${failedAreas}곳` : ''})`);
+  // 보낼 대상이 있었는데 하나도 못 보냈을 때만 실패로 본다 (조용한 날은 정상)
+  if (total && !ok) throw new Error(`모든 기기(${total}대)에 알림을 보내지 못했습니다.`);
 }
 
 main().catch(async (err) => {

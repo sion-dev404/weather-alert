@@ -5,6 +5,11 @@ on:
     # GitHub Actions cron은 UTC 기준. KST 06:30 = UTC 21:30 (전날)
     - cron: '30 21 * * *'
   workflow_dispatch:
+    inputs:
+      always:
+        description: '조건(매우 더움·추움·비/눈)과 관계없이 보내기 (시험용)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write # 만료된 구독을 push-subscriptions.json 에서 지우고 커밋하기 위해
@@ -24,7 +29,7 @@ jobs:
           cache: npm
       - run: npm ci --omit=dev
       - name: Send weather (웹 푸시)
-        run: node send-weather.js
+        run: node send-weather.js ${{ inputs.always && '--always' || '' }}
         env:
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
           NX: ${{ secrets.NX }}

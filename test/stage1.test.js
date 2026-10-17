@@ -61,3 +61,18 @@ test('요약: 강수 없으면 우산 문구 없음', () => {
   assert.doesNotMatch(msg, /우산/);
   assert.match(msg, /맑음/);
 });
+
+test('알림 조건: 매우 더움·매우 추움·비/눈일 때만', async () => {
+  const { alertReasons, formatPush } = await import('../src/summary.js');
+  const base = { tmn: 12, tmx: 24, popAm: 10, popPm: 20, skyAm: 1, skyPm: 1, ptyCodes: [], hourlyTemps: [] };
+  const kinds = (s) => alertReasons({ ...base, ...s }).map((r) => r.kind);
+  assert.deepEqual(kinds({}), []); // 평범한 날은 보내지 않음
+  assert.deepEqual(kinds({ tmx: 33 }), ['hot']);
+  assert.deepEqual(kinds({ tmx: 32 }), []);
+  assert.deepEqual(kinds({ tmn: -5 }), ['cold']);
+  assert.deepEqual(kinds({ tmn: -4, tmx: 0 }), ['cold']); // 낮에도 영하
+  assert.deepEqual(kinds({ ptyCodes: [1] }), ['rain']);
+  assert.deepEqual(kinds({ ptyCodes: [3], tmn: -8, tmx: -1 }), ['rain', 'cold']);
+  const msg = formatPush({ ...base, ptyCodes: [1] }, '20261017', '중앙동', alertReasons({ ...base, ptyCodes: [1] }));
+  assert.equal(msg.title, '☂️ 중앙동 비 예보 · 12° / 24°');
+});

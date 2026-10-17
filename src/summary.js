@@ -89,14 +89,39 @@ export function summarizeToday(items, today, tmnItems = []) {
 const skyLabel = (code) => (SKY[code] ? `${SKY[code].emoji} ${SKY[code].text}` : '-');
 const popLabel = (p) => (p === null ? '-' : `${p}%`);
 
-/** 알림창용 짧은 형식: 제목 한 줄 + 본문 두세 줄 */
-export function formatPush(s, today, location = '') {
+/**
+ * 아침 알림을 보낼 조건 (기상청 특보 기준 참고). 숫자를 바꾸면 기준이 바뀐다.
+ * - 매우 더움: 최고기온 33°C 이상 (폭염주의보 기준)
+ * - 매우 추움: 최저기온 -5°C 이하 또는 최고기온 0°C 이하
+ * - 비·눈: 오늘 예보에 강수 형태(비, 비/눈, 눈, 소나기)가 한 번이라도 있음
+ */
+export const ALERT = { HOT_MAX: 33, COLD_MIN: -5, COLD_MAX: 0 };
+
+/** 오늘 알림을 보낼 이유 목록. 비어 있으면 알림을 보내지 않는다. */
+export function alertReasons(s, t = ALERT) {
+  const reasons = [];
+  if (s.ptyCodes.length) {
+    const snow = s.ptyCodes.some((c) => c === 2 || c === 3);
+    reasons.push({ kind: 'rain', emoji: snow ? '❄️' : '☂️', text: `${s.ptyCodes.map((c) => PTY[c].text).join('·')} 예보` });
+  }
+  if (s.tmx !== null && s.tmx >= t.HOT_MAX) {
+    reasons.push({ kind: 'hot', emoji: '🥵', text: `매우 더움` });
+  }
+  if ((s.tmn !== null && s.tmn <= t.COLD_MIN) || (s.tmx !== null && s.tmx <= t.COLD_MAX)) {
+    reasons.push({ kind: 'cold', emoji: '🥶', text: `매우 추움` });
+  }
+  return reasons;
+}
+
+/** 알림창용 짧은 형식: 제목 한 줄 + 본문 두세 줄. reasons 가 있으면 제목에 이유를 먼저 쓴다. */
+export function formatPush(s, today, location = '', reasons = []) {
   const m = Number(today.slice(4, 6));
   const d = Number(today.slice(6, 8));
   const sky = (code) => SKY[code]?.text ?? '-';
   const skyText = s.skyAm === s.skyPm ? sky(s.skyAm) : `${sky(s.skyAm)} → ${sky(s.skyPm)}`;
-  const emoji = SKY[s.skyAm]?.emoji ?? '';
-  const title = `${emoji} ${location ? location + ' ' : ''}${skyText} · ${fmtTemp(s.tmn)} / ${fmtTemp(s.tmx)}`.trim();
+  const emoji = reasons[0]?.emoji ?? SKY[s.skyAm]?.emoji ?? '';
+  const what = reasons.length ? reasons.map((r) => r.text).join(' · ') : skyText;
+  const title = `${emoji} ${location ? location + ' ' : ''}${what} · ${fmtTemp(s.tmn)} / ${fmtTemp(s.tmx)}`.trim();
 
   const lines = [`${m}월 ${d}일 강수확률 오전 ${popLabel(s.popAm)} · 오후 ${popLabel(s.popPm)}`];
   if (s.hourlyTemps.length) {
