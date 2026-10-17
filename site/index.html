@@ -508,15 +508,16 @@ function setupLocation(d) {
     const needRegister = !sameGrid || loc.name !== d.location;
     if (!needRegister || (loc.dismissed && !fromUser)) { panel.hidden = true; return; }
 
-    // 위치가 채워진 GitHub 이슈 작성 화면을 연다. 제출하면 Actions(location.yml)가 location.json 을 바꾸고 다시 배포한다.
-    const body = `이 이슈를 제출하면 날씨와 아침 알림의 기준 위치가 바뀝니다.\n\n${JSON.stringify({ NX: loc.nx, NY: loc.ny, LOCATION_NAME: loc.name })}`;
-    const issueUrl = `https://github.com/sion-dev404/weather-alert/issues/new?title=${encodeURIComponent(`위치 변경: ${loc.name}`)}&body=${encodeURIComponent(body)}`;
+    // 저장소 기본 위치(location.json) 변경용 이슈 — 저장소 주인만 처리된다 (location.yml)
+    const ownerBody = `이 이슈를 제출하면 기본 날씨 위치가 바뀝니다.\n\n${JSON.stringify({ NX: loc.nx, NY: loc.ny, LOCATION_NAME: loc.name })}`;
+    const ownerUrl = `${REPO_URL}/issues/new?title=${encodeURIComponent(`위치 변경: ${loc.name}`)}&body=${encodeURIComponent(ownerBody)}`;
     say(`<b>현재 위치: ${esc(loc.name)}</b><br>${sameGrid
-      ? '날씨 기준 지역은 같습니다. 아침 알림 제목에도 이 이름을 쓰려면 바꾸기를 누르세요.'
+      ? '날씨 기준 지역은 같습니다. 아침 알림 제목에도 이 이름이 나오게 하려면 바꾸기를 누르세요.'
       : `지금 보이는 날씨는 다른 지역(${esc(d.location || '기존 지역')}) 기준입니다.`}
-      <br>GitHub 창에서 <b>Create(Submit)</b>만 누르면 2~3분 뒤 날씨와 알림이 이 위치로 바뀝니다.
-      <div class="row" style="margin-top:12px"><button id="locGo">이 위치로 바꾸기</button><button id="locClose">닫기</button></div>`);
-    $('#locGo').onclick = () => { window.open(issueUrl, '_blank', 'noopener'); };
+      <br><b>이 위치로 바꾸기</b>를 누르면 이 기기의 화면과 아침 알림이 이 위치 날씨로 바뀝니다. (알림 권한 필요)
+      <div class="row" style="margin-top:12px"><button id="locGo">이 위치로 바꾸기</button><button id="locClose">닫기</button></div>
+      <div style="margin-top:10px;font-size:12px"><a href="${ownerUrl}" target="_blank" rel="noopener" style="color:inherit">기본 위치로 지정 (저장소 주인만)</a></div>`);
+    $('#locGo').onclick = () => prepareRegistration(panel, loc);
     $('#locClose').onclick = () => { panel.hidden = true; locStore.set({ ...loc, dismissed: true }); };
   };
 
@@ -598,73 +599,107 @@ async function encryptSub(subJson) {
   return bytesToB64(new TextEncoder().encode(JSON.stringify(box)));
 }
 const SUB_KEY = 'weather-alert:sub-registered'; // 이 브라우저에서 등록 요청한 endpoint (편의용)
+const WID_KEY = 'weather-alert:wid'; // 이 기기 전용 날씨 파일(w/<ID>.json) 이름. 무작위라 누구·어디인지 알 수 없다.
 
-async function setupNotify() {
-  const btn = $('#notifyBtn'), panel = $('#notifyPanel'), label = btn.querySelector('span');
-  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  const ios = /iPhone|iPad/.test(navigator.userAgent);
-  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const readWid = () => { try { return localStorage.getItem(WID_KEY); } catch { return null; } };
+function getWid() {
+  let w = readWid();
+  if (!w || !/^[a-f0-9]{32}$/.test(w)) {
+    w = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    try { localStorage.setItem(WID_KEY, w); } catch { return null; } // 저장할 수 없으면 기기별 화면 없이 등록
+  }
+  return w;
+}
 
-  const show = (html) => { panel.innerHTML = html; panel.hidden = false; };
+// 알림 권한 → 구독. 실패하면 사용자에게 보여 줄 문장을 담은 오류를 던진다.
+async function subscribeDevice() {
+  if (!pushSupported()) throw new Error('이 브라우저는 웹 알림을 지원하지 않습니다. Chrome이나 Edge, Safari 최신 버전에서 열어 주세요.');
+  if (Notification.permission === 'denied') throw new Error('알림이 차단되어 있습니다. 주소창 왼쪽 <b>사이트 설정</b>에서 알림을 <b>허용</b>으로 바꾼 뒤 다시 눌러 주세요.');
+  if ((await Notification.requestPermission()) !== 'granted') throw new Error('알림 권한을 허용해야 아침 알림을 받을 수 있습니다.');
+  const ready = await navigator.serviceWorker.ready;
+  return (await ready.pushManager.getSubscription())
+    || ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) });
+}
 
-  const registered = (sub) => { try { return localStorage.getItem(SUB_KEY) === sub.endpoint; } catch { return false; } };
-
-  // 암호화한 구독으로 "알림 등록" 이슈 작성 화면을 연다. 제출하면 Actions(subscribe.yml)가 등록하고 확인 알림을 보낸다.
-  const showSub = async (sub) => {
-    const blob = await encryptSub(sub);
-    const body = `이 이슈를 제출하면 이 기기가 아침 날씨 알림 대상으로 등록됩니다. (구독 정보는 암호화되어 있습니다)\n\nSUB:${blob}`;
+/**
+ * 이 기기 등록 준비: 구독 + 위치 + 기기 ID 를 암호화해 "알림 등록" 이슈 링크를 panel 에 보여 준다.
+ * 제출하면 Actions(subscribe.yml)가 등록하고, 확인 알림을 보내고, 이 기기용 날씨 화면을 만든다.
+ * (window.open 은 사용자가 직접 누른 직후에만 열리므로, 준비 → 버튼 → 열기 두 단계로 한다)
+ */
+async function prepareRegistration(panel, loc) {
+  const say = (html) => { panel.innerHTML = html; panel.hidden = false; };
+  say('등록을 준비하는 중…');
+  try {
+    const sub = (await subscribeDevice()).toJSON();
+    if (!loc) {
+      // 위치를 모르면 한 번 확인해 본다 (거부해도 기본 위치로 등록할 수 있음)
+      try { loc = await locate(); locStore.set(loc); } catch { loc = null; }
+    }
+    const payload = { ...sub, wid: getWid() };
+    if (loc?.name) payload.loc = { nx: loc.nx, ny: loc.ny, name: loc.name };
+    const blob = await encryptSub(payload);
+    // 이슈 본문에는 암호문만 넣는다 (공개 저장소라 동 이름 같은 평문은 남기지 않음)
+    const body = `이 이슈를 제출하면 이 기기가 아침 날씨 알림 대상으로 등록됩니다. (구독·위치 정보는 암호화되어 있습니다)\n\nSUB:${blob}`;
     const url = `${REPO_URL}/issues/new?title=${encodeURIComponent('알림 등록')}&body=${encodeURIComponent(body)}`;
-    show(`<b>${registered(sub) ? '이 기기는 등록을 요청한 적이 있습니다.' : '알림 권한이 켜졌습니다.'}</b><br>
-      아래 <b>이 기기 알림 등록하기</b> → GitHub 창에서 <b>Create</b>만 누르면, 1~2분 뒤 "알림이 등록되었습니다" 알림이 옵니다.
-      알림이 안 오면 다시 등록하면 됩니다.
-      <div class="row" style="margin-top:12px"><button id="regBtn">이 기기 알림 등록하기</button><button id="testBtn">테스트 알림</button></div>`);
-    $('#regBtn').onclick = () => {
+    say(`<b>등록 위치: ${loc?.name ? esc(loc.name) : '기본 위치'}</b><br>
+      ${loc?.name ? '이 위치의 날씨로 아침 알림과 이 기기 화면이 바뀝니다.' : '위치를 확인하지 못해 기본 위치 날씨로 등록됩니다. 위쪽 지역명을 눌러 위치를 허용하면 내 동네로 바꿀 수 있어요.'}
+      <br><b>GitHub에서 등록하기</b> → <b>Create</b>를 누르면 1~2분 뒤 "알림이 등록되었습니다" 알림이 옵니다.
+      <div class="row" style="margin-top:12px"><button id="regBtn">GitHub에서 등록하기</button><button id="testBtn">테스트 알림</button></div>`);
+    panel.querySelector('#regBtn').onclick = () => {
       try { localStorage.setItem(SUB_KEY, sub.endpoint); } catch { /* 저장 불가 환경 무시 */ }
       window.open(url, '_blank', 'noopener');
     };
-    $('#testBtn').onclick = async () => {
+    panel.querySelector('#testBtn').onclick = async () => {
       const reg = await navigator.serviceWorker.ready;
       reg.showNotification('오늘의 날씨', { body: '알림이 잘 도착했습니다.', icon: 'icon-192.png', badge: 'badge-96.png', tag: 'test' });
     };
-  };
+  } catch (e) {
+    console.error(e);
+    say(e.message.startsWith('알림') || e.message.startsWith('이 브라우저') ? e.message : `등록 준비에 실패했습니다: ${esc(e.message)}`);
+  }
+}
 
-  if (!supported) {
-    btn.onclick = () => show(ios && !standalone
+async function setupNotify() {
+  const btn = $('#notifyBtn'), panel = $('#notifyPanel'), label = btn.querySelector('span');
+  const ios = /iPhone|iPad/.test(navigator.userAgent);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+  if (!pushSupported()) {
+    btn.onclick = () => { panel.innerHTML = ios && !standalone
       ? '아이폰은 Safari에서 <b>공유 → 홈 화면에 추가</b>를 한 뒤, 홈 화면 아이콘으로 열어서 알림을 설정할 수 있습니다.'
-      : '이 브라우저는 웹 알림을 지원하지 않습니다. Chrome이나 Edge, Safari 최신 버전에서 열어 주세요.');
+      : '이 브라우저는 웹 알림을 지원하지 않습니다. Chrome이나 Edge, Safari 최신 버전에서 열어 주세요.'; panel.hidden = false; };
     return;
   }
 
   const reg = await navigator.serviceWorker.register('sw.js');
   const existing = await reg.pushManager.getSubscription();
-  if (existing && Notification.permission === 'granted' && registered(existing)) label.textContent = '알림 켜짐 · 다시 등록하기';
+  const asked = (() => { try { return localStorage.getItem(SUB_KEY); } catch { return null; } })();
+  if (existing && Notification.permission === 'granted' && asked === existing.endpoint) label.textContent = '알림 켜짐 · 다시 등록하기';
 
   btn.onclick = async () => {
-    if (Notification.permission === 'denied') {
-      show('알림이 차단되어 있습니다. 주소창 왼쪽의 <b>사이트 설정</b>에서 알림을 <b>허용</b>으로 바꾼 뒤 다시 눌러 주세요.');
-      return;
-    }
     btn.disabled = true;
-    try {
-      if ((await Notification.requestPermission()) !== 'granted') {
-        show('알림 권한을 허용해야 아침 알림을 받을 수 있습니다.');
-        return;
-      }
-      const ready = await navigator.serviceWorker.ready;
-      const sub = (await ready.pushManager.getSubscription())
-        || (await ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) }));
-      await showSub(sub.toJSON());
-    } catch (e) {
-      console.error(e);
-      show(`알림 설정에 실패했습니다: ${esc(e.message)}`);
-    } finally {
-      btn.disabled = false;
-    }
+    // 최근에 확인한 위치가 있으면 그 위치로 등록한다
+    await prepareRegistration(panel, locStore.get());
+    btn.disabled = false;
   };
 }
 
-fetch('weather.json', { cache: 'no-store' })
-  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+// 이 기기를 위치와 함께 등록했다면 기기 전용 날씨(w/<ID>.json), 아니면 기본 날씨(weather.json)
+async function loadWeather() {
+  const wid = readWid();
+  if (wid) {
+    try {
+      const r = await fetch(`w/${wid}.json`, { cache: 'no-store' });
+      if (r.ok) return r.json();
+    } catch { /* 없거나 실패하면 기본 날씨 */ }
+  }
+  const r = await fetch('weather.json', { cache: 'no-store' });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+loadWeather()
   .then(render)
   .catch((e) => { console.error(e); $('#app').innerHTML = '<div class="err">날씨 데이터를 불러오지 못했습니다.</div>'; });
 </script>

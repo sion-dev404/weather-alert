@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write # 등록 후 화면(기기별 날씨 파일) 다시 배포
 
 concurrency:
   group: subscriptions
@@ -43,6 +44,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add push-subscriptions.json
           git diff --cached --quiet || { git commit -m "알림 기기 등록 (${{ steps.sub.outputs.count }}대)"; git pull --rebase; git push; }
+      # GITHUB_TOKEN 으로 한 push 는 다른 워크플로를 깨우지 않으므로 직접 실행한다.
+      - name: 기기별 날씨 화면 다시 배포
+        run: gh workflow run pages.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: 이슈 닫기
         env:
           GH_TOKEN: ${{ github.token }}

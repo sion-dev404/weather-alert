@@ -1,10 +1,11 @@
-// 아침 날씨 알림: 단기예보 → 오늘 요약 → 웹 푸시 전송
+// 아침 날씨 알림: 등록된 기기를 동네(격자)별로 묶어 → 동네마다 단기예보 → 오늘 요약 → 웹 푸시 전송
 // 사용: node --env-file-if-exists=.env send-weather.js [--dry-run]
-import { fetchVilageFcst } from './src/kma.js';
-import { getLatestVilageBase, getTodayTmnBase, getTodayKst } from './src/kst.js';
+import { getTodayKst } from './src/kst.js';
 import { summarizeToday, formatPush } from './src/summary.js';
-import { sendPush } from './src/push.js';
+import { sendPush, sendToTargets } from './src/push.js';
 import { loadLocation } from './src/location.js';
+import { fetchShort } from './src/fetchers.js';
+import { loadSubscriptions, groupByLocation, removeExpired } from './src/subs.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -16,34 +17,53 @@ function requireEnv(...names) {
 async function main() {
   requireEnv('KMA_SERVICE_KEY');
   const { KMA_SERVICE_KEY: serviceKey } = process.env;
-  const { nx, ny, name: location } = await loadLocation();
+  const owner = await loadLocation(); // 위치 없이 등록된 기기는 기본 위치로 보낸다
   const now = new Date();
   const today = getTodayKst(now);
 
-  const latest = getLatestVilageBase(now);
-  const tmnBase = getTodayTmnBase(now);
-  // 최신 발표분이 이미 02시 발표분이면 한 번만 조회한다.
-  const sameAsLatest = tmnBase && tmnBase.baseDate === latest.baseDate && tmnBase.baseTime === latest.baseTime;
+  const targets = await loadSubscriptions();
+  if (!targets.length && !dryRun) throw new Error('등록된 알림 기기가 없습니다. 페이지에서 "아침 알림 설정하기"를 눌러 주세요.');
+  // 미리보기인데 기기가 없으면 기본 위치 하나만 보여 준다
+  const groups = targets.length ? groupByLocation(targets, owner) : [{ loc: owner, targets: [] }];
 
-  const [items, tmnItems] = await Promise.all([
-    fetchVilageFcst({ serviceKey, nx, ny, ...latest }),
-    tmnBase && !sameAsLatest
-      ? fetchVilageFcst({ serviceKey, nx, ny, ...tmnBase }).catch((e) => {
-          // 02시 분은 보강용이라 실패해도 최신 발표분만으로 진행한다.
-          console.warn(`02시 발표분 조회 실패(무시): ${e.message}`);
-          return [];
-        })
-      : [],
-  ]);
-
-  const message = formatPush(summarizeToday(items, today, tmnItems), today, location);
-
-  if (dryRun) {
-    console.log(`${message.title}\n${message.body}`);
-    return;
+  let ok = 0, total = 0, failedAreas = 0;
+  const expired = [];
+  for (const g of groups) {
+    let summary;
+    try {
+      const { items, tmnItems } = await fetchShort({ serviceKey, nx: g.loc.nx, ny: g.loc.ny, now });
+      summary = summarizeToday(items, today, tmnItems);
+    } catch (e) {
+      failedAreas++;
+      total += g.targets.length;
+      console.warn(`격자 ${g.loc.nx},${g.loc.ny} 예보 실패 (기기 ${g.targets.length}대): ${e.message}`);
+      continue;
+    }
+    // 같은 격자라도 기기마다 자기 동 이름으로 제목을 단다
+    const byName = new Map();
+    for (const t of g.targets.length ? g.targets : [{ loc: null }]) {
+      const name = t.loc?.name || g.loc.name || owner.name;
+      if (!byName.has(name)) byName.set(name, []);
+      if (t.sub) byName.get(name).push(t);
+    }
+    for (const [name, list] of byName) {
+      const message = formatPush(summary, today, name);
+      if (dryRun) {
+        console.log(`[${list.length}대] ${message.title}\n${message.body}\n`);
+        continue;
+      }
+      const r = await sendToTargets(list, message);
+      ok += r.ok;
+      total += list.length;
+      expired.push(...r.expired);
+    }
   }
-  const { ok, total } = await sendPush(message);
-  console.log(`웹 푸시 전송 완료 (${ok}/${total}대)`);
+  if (dryRun) return;
+
+  const removed = await removeExpired(expired);
+  if (removed) console.log(`만료된 구독 ${removed}개를 목록에서 지웠습니다.`);
+  console.log(`웹 푸시 전송 완료 (${ok}/${total}대, 동네 ${groups.length}곳${failedAreas ? `, 예보 실패 ${failedAreas}곳` : ''})`);
+  if (!ok) throw new Error(`모든 기기(${total}대)에 알림을 보내지 못했습니다.`);
 }
 
 main().catch(async (err) => {

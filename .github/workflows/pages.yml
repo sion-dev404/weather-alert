@@ -6,7 +6,7 @@ on:
     - cron: '20 */3 * * *'
   push:
     branches: [main]
-    paths: ['site/**', 'src/**', 'build-site.js', 'location.json', '.github/workflows/pages.yml']
+    paths: ['site/**', 'src/**', 'build-site.js', 'location.json', 'push-subscriptions.json', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build weather.json
+      - name: Build weather.json (+ 기기별 w/*.json)
         run: node build-site.js
         env:
+          SUB_ENC_PRIVATE_KEY: ${{ secrets.SUB_ENC_PRIVATE_KEY }}
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
           NX: ${{ secrets.NX }}
           NY: ${{ secrets.NY }}
