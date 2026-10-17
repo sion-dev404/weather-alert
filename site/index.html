@@ -3,160 +3,366 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2b6cb0" id="theme">
+<meta name="theme-color" content="#4a90e2" id="theme">
 <title>오늘의 날씨</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
   :root {
-    --bg-a: #3a7bd5; --bg-b: #1c3f78;
-    --card: rgba(255,255,255,.16); --line: rgba(255,255,255,.22);
-    --text: #fff; --sub: rgba(255,255,255,.78); --accent: #bfe3ff;
+    --bg-a: #7cc0f2; --bg-b: #2f6fd6;
+    --card: rgba(255,255,255,.17); --line: rgba(255,255,255,.2);
+    --sub: rgba(255,255,255,.8); --dim: rgba(255,255,255,.55);
+    --sun: #ffd54a; --graph: #f7dc4f;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { background: var(--bg-b); }
   body {
-    margin: 0; min-height: 100vh; color: var(--text); font-weight: 700;
-    font-family: "Samsung Sans", "SamsungOne", -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    margin: 0; min-height: 100vh; color: #fff; font-weight: 500;
+    font-family: "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
     background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%) fixed;
-    transition: background .6s;
   }
-  main { max-width: 560px; margin: 0 auto; padding: calc(20px + env(safe-area-inset-top)) 16px 40px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  main { position: relative; max-width: 480px; margin: 0 auto; padding: 0 16px 32px; }
 
-  /* 상단: 위치 + 큰 기온 + 아이콘 */
-  .top { padding: 8px 8px 20px; }
-  .loc { font-size: 20px; display: flex; align-items: center; gap: 6px; }
-  .upd { font-size: 13px; color: var(--sub); font-weight: 600; margin-top: 4px; }
-  .now { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; }
-  .temp { font-size: 128px; line-height: .95; font-weight: 800; letter-spacing: -6px; }
-  .temp sup { font-size: 56px; vertical-align: top; letter-spacing: 0; position: relative; top: 8px; margin-left: 2px; }
-  .big-icon { font-size: 92px; line-height: 1; filter: drop-shadow(0 6px 14px rgba(0,0,0,.25)); }
-  .desc { font-size: 22px; margin-top: 10px; }
-  .range { font-size: 17px; color: var(--sub); margin-top: 4px; font-weight: 700; }
+  /* 맑은 낮의 햇빛 번짐 (오른쪽 위 고정) */
+  .glare {
+    position: fixed; top: -120px; right: -120px; width: 420px; height: 420px; pointer-events: none; display: none;
+    background: radial-gradient(circle, rgba(255,255,255,.95) 0 10%, rgba(255,255,255,.45) 22%, rgba(255,255,255,.12) 45%, transparent 70%);
+    animation: glow 6s ease-in-out infinite alternate;
+  }
+  body.sunny .glare { display: block; }
+  @keyframes glow { from { opacity: .8; } to { opacity: 1; } }
+
+  /* ① 히어로 */
+  .hero { min-height: 40vh; display: flex; flex-direction: column; padding: calc(24px + env(safe-area-inset-top)) 4px 20px; }
+  .loc { display: flex; align-items: center; gap: 6px; font-size: 22px; font-weight: 600; }
+  .temp { font-size: 96px; font-weight: 200; line-height: 1; margin-top: 18px; letter-spacing: -2px; }
+  .desc { font-size: 22px; font-weight: 600; margin-top: 6px; }
+  .hero .grow { flex: 1; min-height: 24px; }
+  .hl, .feel { font-size: 16px; font-weight: 500; }
+  .feel { margin-top: 4px; }
+
+  /* ② 스크롤 시 고정되는 알약 지역명 */
+  .pillbar { position: fixed; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 5; pointer-events: none; }
+  .pill {
+    max-width: 480px; margin: 0 auto; padding: 0 16px; opacity: 0; transform: translateY(-6px);
+    transition: opacity .25s, transform .25s;
+  }
+  .pill span {
+    display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 999px;
+    background: rgba(255,255,255,.75); color: #111; font-size: 17px; font-weight: 600;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  }
+  .pill.on { opacity: 1; transform: none; }
 
   /* 카드 공통 */
-  section {
-    background: var(--card); border: 1px solid var(--line); border-radius: 26px;
-    padding: 18px 14px; margin-top: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  .card {
+    background: var(--card); border-radius: 24px; padding: 20px; margin-top: 12px;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   }
-  h2 { margin: 0 0 14px 6px; font-size: 16px; font-weight: 800; }
+  .card-head { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); }
+  .more { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-top: 14px; width: 100%; font-size: 12px; color: var(--sub); }
+  .more svg { transition: transform .2s; }
+  .more[aria-expanded="true"] svg { transform: rotate(90deg); }
 
-  /* 시간별 */
-  .scroll { overflow-x: auto; scrollbar-width: none; }
+  /* ③ 시간별 */
+  .summary { font-size: 14px; font-weight: 600; line-height: 1.5; margin: 0; }
+  .divider { height: 1px; background: var(--line); margin: 14px 0 12px; }
+  .scroll { overflow-x: auto; scrollbar-width: none; margin: 0 -8px; }
   .scroll::-webkit-scrollbar { display: none; }
-  .hrow { position: relative; width: max-content; }
-  .hrow .cols { display: flex; }
-  .hc { width: 62px; text-align: center; display: flex; flex-direction: column; align-items: center; }
-  .hc .t { font-size: 14px; color: var(--sub); }
-  .hc.cur .t { color: #fff; }
-  .hc .i { font-size: 28px; margin: 8px 0 2px; }
-  .hc .p { font-size: 12px; color: var(--accent); height: 15px; }
-  .hc .d { font-size: 17px; }
+  .hrow { width: max-content; }
+  .cols { display: flex; }
+  .hc { width: 64px; display: flex; flex-direction: column; align-items: center; }
+  .hc .t { font-size: 12px; color: var(--sub); white-space: nowrap; }
+  .hc .t.mark { color: #fff; font-weight: 700; }
+  .hc .i { margin: 10px 0 8px; height: 30px; }
+  .hc .p { font-size: 11px; color: var(--sub); display: flex; align-items: center; gap: 2px; }
   .graph { display: block; }
+  .graph text { fill: #fff; font-size: 13px; font-weight: 500; text-anchor: middle; }
+  .hlist { margin-top: 8px; }
+  .hlist[hidden] { display: none; }
+  .hl-row { display: grid; grid-template-columns: 1fr 36px 56px 44px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--line); font-size: 14px; }
+  .hl-row .p { font-size: 12px; color: var(--sub); display: flex; align-items: center; gap: 2px; }
+  .hl-row .d { text-align: right; }
+  .hl-date { font-size: 12px; color: var(--sub); padding: 14px 4px 6px; }
 
-  /* 주간 */
-  .day { display: grid; grid-template-columns: 58px 1fr 54px 92px; align-items: center; gap: 6px; padding: 12px 6px; border-top: 1px solid var(--line); }
-  .day:first-of-type { border-top: 0; }
-  .day .n { font-size: 17px; }
-  .day .n small { display: block; font-size: 12px; color: var(--sub); font-weight: 600; margin-top: 1px; }
-  .day.today .n { color: #fff; }
-  .day .ic { display: flex; align-items: center; gap: 14px; font-size: 26px; }
-  .day .ic .arrow { font-size: 12px; color: var(--sub); }
-  .day .r { font-size: 14px; color: var(--accent); text-align: center; }
-  .day .m { text-align: right; font-size: 18px; font-variant-numeric: tabular-nums; }
-  .day .m .lo { color: var(--sub); }
-  .day .m .sl { color: var(--sub); margin: 0 3px; font-weight: 600; }
+  /* ④ 안내 카드 캐러셀 */
+  .carousel { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -20px; }
+  .carousel::-webkit-scrollbar { display: none; }
+  .slide { flex: 0 0 100%; scroll-snap-align: start; padding: 0 20px; }
+  .slide .body { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; min-height: 44px; }
+  .slide .msg { font-size: 15px; font-weight: 600; line-height: 1.45; }
+  .slide .val { font-size: 26px; font-weight: 500; white-space: nowrap; }
+  .dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.4); }
+  .dots i.on { background: #fff; }
 
-  .foot { text-align: center; color: var(--sub); font-size: 12px; font-weight: 600; margin-top: 22px; }
-  .err { text-align: center; padding: 80px 0; color: var(--sub); }
+  /* ⑤ 주간 */
+  .day { display: grid; grid-template-columns: 1fr 52px 34px 34px 72px; align-items: center; column-gap: 8px; padding: 11px 0; font-size: 16px; }
+  .day .n { font-weight: 600; }
+  .day .r { font-size: 11px; color: var(--sub); display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+  .day .ic { display: flex; justify-content: center; }
+  .day .m { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .day .m .lo { margin-left: 8px; }
+  .day.past { color: var(--sub); }
+  .day.extra[hidden] { display: none; }
+
+  /* ⑨ 하단 */
+  .foot { color: var(--sub); font-size: 12px; line-height: 2; padding: 20px 8px 0; }
+  .err { text-align: center; padding: 120px 0; color: var(--sub); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glare { animation: none; }
+    .pill, .more svg { transition: none; }
+    .carousel { scroll-behavior: auto; }
+  }
 </style>
 </head>
 <body>
+<div class="glare" aria-hidden="true"></div>
+<div class="pillbar"><div class="pill" id="pill" aria-hidden="true"></div></div>
 <main id="app"><div class="err">불러오는 중…</div></main>
 <script>
 const $ = (s) => document.querySelector(s);
-const fmt = (v) => (v === null || v === undefined ? '-' : Math.round(v) + '°');
-const pop = (p) => (p === null || p === undefined ? '' : p + '%');
-const md = (d) => `${+d.slice(4, 6)}.${+d.slice(6, 8)}`;
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const deg = (v) => (v === null || v === undefined ? '-' : Math.round(v) + '°');
 const pad2 = (n) => String(n).padStart(2, '0');
+const isNight = (h) => h >= 19 || h < 6;
+const ampm = (h) => `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시`;
 
-// 날씨·시간대에 맞춰 배경 그라데이션을 바꾼다 (삼성 날씨처럼)
-function theme(cur) {
-  const night = cur && (cur.hour >= 19 || cur.hour < 6);
-  const t = cur?.text || '';
+// 브라우저의 현재 한국 시각 (YYYYMMDD, 시)
+function kstNow() {
+  const k = new Date(Date.now() + 9 * 3600e3);
+  return { date: `${k.getUTCFullYear()}${pad2(k.getUTCMonth() + 1)}${pad2(k.getUTCDate())}`, hour: k.getUTCHours() };
+}
+
+/* ---------- 날씨 아이콘 (직접 그린 SVG) ---------- */
+const PIN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
+const UMB = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 0 1 6.5 6.5h-13A6.5 6.5 0 0 1 8 1.5z"/><path d="M8 8v5a1.5 1.5 0 0 1-3 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+const CHEV = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>';
+
+const cloud = (fill, t = '') => `<g fill="${fill}" transform="${t}"><circle cx="11" cy="19" r="5.5"/><circle cx="17" cy="15" r="7"/><circle cx="23" cy="19.5" r="5"/><rect x="11" y="18" width="12" height="6.5"/></g>`;
+const slashes = (xs, y1 = 13, y2 = 25) => xs.map((x) => `<line x1="${x + 5}" y1="${y1}" x2="${x}" y2="${y2}"/>`).join('');
+const ICONS = {
+  sun: `<circle cx="16" cy="16" r="9" fill="var(--sun)"/>`,
+  moon: `<path d="M19 5.5a10.5 10.5 0 1 0 8 17.2A9 9 0 0 1 19 5.5z" fill="#ffe9a8"/>`,
+  partly: `<circle cx="21" cy="11" r="6.5" fill="var(--sun)"/>${cloud('#fff', 'translate(-2 3)')}`,
+  partlyNight: `<path d="M22 4a7 7 0 1 0 6 10.5A6 6 0 0 1 22 4z" fill="#ffe9a8"/>${cloud('#fff', 'translate(-2 3)')}`,
+  cloudy: `${cloud('#b9c4cf', 'translate(5 -3) scale(.85)')}${cloud('#eef2f5', 'translate(-3 3)')}`,
+  rain: `<g stroke="#e3eeff" stroke-width="2.4" stroke-linecap="round">${slashes([6, 13, 20])}</g>`,
+  shower: `<circle cx="22" cy="9" r="5" fill="var(--sun)"/>${cloud('#fff', 'translate(-3 -4)')}<g stroke="#e3eeff" stroke-width="2.2" stroke-linecap="round">${slashes([9, 16], 24, 30)}</g>`,
+  snow: `<g fill="#fff"><circle cx="9" cy="12" r="2.4"/><circle cx="20" cy="9" r="2.4"/><circle cx="14" cy="19" r="2.4"/><circle cx="25" cy="17" r="2.4"/><circle cx="9" cy="26" r="2.4"/><circle cx="21" cy="26" r="2.4"/></g>`,
+  rainsnow: `<g stroke="#e3eeff" stroke-width="2.4" stroke-linecap="round">${slashes([5, 17])}</g><g fill="#fff"><circle cx="14" cy="13" r="2.4"/><circle cx="26" cy="19" r="2.4"/><circle cx="12" cy="24" r="2.4"/></g>`,
+};
+function kindOf(text, night) {
+  const t = text || '';
+  if (/비\/눈|눈\/비|진눈/.test(t) || (/눈/.test(t) && /비/.test(t))) return 'rainsnow';
+  if (/소나기/.test(t)) return 'shower';
+  if (/눈/.test(t)) return 'snow';
+  if (/비/.test(t)) return 'rain';
+  if (/흐/.test(t)) return 'cloudy';
+  if (/구름/.test(t)) return night ? 'partlyNight' : 'partly';
+  return night ? 'moon' : 'sun';
+}
+const icon = (kind, size = 28) => `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">${ICONS[kind] || ''}</svg>`;
+const isWet = (k) => ['rain', 'shower', 'snow', 'rainsnow'].includes(k);
+
+/* ---------- 배경: 날씨·시간대 ---------- */
+function theme(kind, hour) {
+  const night = isNight(hour);
+  const twilight = hour === 5 || hour === 6 || hour === 17 || hour === 18;
   let a, b;
-  if (/비|소나기|눈/.test(t)) [a, b] = night ? ['#2c3e50', '#10161f'] : ['#5d7388', '#2c3a4a'];
-  else if (/흐림/.test(t))   [a, b] = night ? ['#3b4452', '#12161c'] : ['#7c8a99', '#44505e'];
-  else if (/구름/.test(t))   [a, b] = night ? ['#26406b', '#0c1424'] : ['#5b8fd0', '#2f5a96'];
-  else                       [a, b] = night ? ['#1d2f5c', '#070c1c'] : ['#3a8be8', '#1b4c9c'];
+  if (isWet(kind)) [a, b] = night ? ['#2b3542', '#0b0f15'] : ['#5b6e80', '#2b3846'];
+  else if (kind === 'cloudy') [a, b] = night ? ['#39424f', '#11151b'] : ['#8ea3b5', '#4c5f73'];
+  else if (night) [a, b] = ['#1d2b55', '#05070f'];
+  else if (twilight) [a, b] = ['#f0a06a', '#2b3a6b'];
+  else [a, b] = ['#7cc0f2', '#2f6fd6'];
   const r = document.documentElement.style;
   r.setProperty('--bg-a', a); r.setProperty('--bg-b', b);
   $('#theme').setAttribute('content', a);
+  document.body.classList.toggle('sunny', kind === 'sun' && !night && !twilight);
 }
 
-// 시간별 기온 꺾은선 그래프(SVG)
+/* ---------- 시간별 기온 그래프 (노란 선 + 흰 점, 숫자는 점 아래) ---------- */
 function graph(hourly, colW) {
   const temps = hourly.map((h) => h.temp);
-  const lo = Math.min(...temps), hi = Math.max(...temps);
-  const H = 70, padY = 14, span = Math.max(hi - lo, 1);
-  const pts = hourly.map((h, i) => [i * colW + colW / 2, padY + (H - padY * 2) * (1 - (h.temp - lo) / span)]);
-  const line = pts.map((p) => p.join(',')).join(' ');
-  const dots = pts.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#fff"/>`).join('');
-  return `<svg class="graph" width="${colW * hourly.length}" height="${H}" viewBox="0 0 ${colW * hourly.length} ${H}">
-    <polyline points="${line}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
+  const lo = Math.min(...temps), hi = Math.max(...temps), span = Math.max(hi - lo, 1);
+  const top = 8, h = 34, H = top + h + 26, W = colW * hourly.length;
+  const pts = hourly.map((x, i) => [i * colW + colW / 2, top + h * (1 - (x.temp - lo) / span)]);
+  const line = pts.map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' ');
+  const dots = pts.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#fff"/><text x="${x}" y="${y + 20}">${deg(hourly[i].temp)}</text>`).join('');
+  return `<svg class="graph" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <polyline points="${line}" fill="none" stroke="var(--graph)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
 }
 
-function render(d) {
-  const cur = d.current;
+/* ---------- 요약 문장 ---------- */
+function summaryText(hours, rng) {
+  const count = {};
+  for (const h of hours) { const k = kindOf(h.text, false); count[k] = (count[k] || 0) + 1; }
+  const main = Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0] || 'sun';
+  const wetHour = hours.find((h) => isWet(kindOf(h.text)));
+  const what = wetHour && /눈/.test(wetHour.text) ? '눈' : '비';
+  const first = wetHour
+    ? (wetHour === hours[0] ? `현재 ${what}${what === '눈' ? '이' : '가'} 내리고 있습니다.` : `${ampm(wetHour.hour)}부터 ${what} 소식이 있습니다.`)
+    : ({ sun: '맑은 날씨가 예상됩니다.', partly: '구름 많은 날씨가 예상됩니다.', cloudy: '흐린 날씨가 예상됩니다.' }[main] || '맑은 날씨가 예상됩니다.');
+  const second = rng && rng.tmn !== null && rng.tmx !== null
+    ? ` 최저 기온은 ${Math.round(rng.tmn)}°C 이며, 최고 기온은 ${Math.round(rng.tmx)}°C 입니다.` : '';
+  return first + second;
+}
+
+/* ---------- ④ 안내 카드 (해당하는 것만) ---------- */
+function tips(d) {
+  const out = [];
+  const dayName = (x, i) => (i === 0 ? '오늘' : i === 1 ? '내일' : x.dow + '요일');
+  const rainIdx = d.daily.findIndex((x) => (x.pop ?? 0) >= 60 || isWet(kindOf(x.am.text)) || isWet(kindOf(x.pm.text)));
+  if (rainIdx >= 0 && rainIdx < 4) {
+    const x = d.daily[rainIdx];
+    const when = isWet(kindOf(x.am.text)) ? ' 오전' : isWet(kindOf(x.pm.text)) ? ' 오후' : '';
+    const what = /눈/.test(x.am.text + x.pm.text) ? '눈' : '비';
+    out.push({ ic: icon('rain', 16), title: `${what} 예보`, msg: `${dayName(x, rainIdx)}${when} ${what === '눈' ? '눈이' : '비가'} 내릴 가능성이 있습니다`, val: x.pop != null ? x.pop + '%' : '' });
+  }
+  // 어제 기온 데이터가 생기면 표시된다 (2단계 데이터 추가 후)
+  if (d.yesterday?.tmx != null && d.today_range?.tmx != null) {
+    const diff = Math.round(d.today_range.tmx - d.yesterday.tmx);
+    const msg = diff === 0 ? '어제와 기온이 비슷합니다' : `어제보다 기온이 ${Math.abs(diff) <= 2 ? '약간 ' : ''}${diff > 0 ? '높습니다' : '낮습니다'}`;
+    out.push({ ic: '🌡', title: '오늘의 기온', msg, val: diff === 0 ? '0°' : `${Math.abs(diff)}°${diff > 0 ? '↑' : '↓'}` });
+  }
   const rng = d.today_range;
-  theme(cur);
+  if (rng && rng.tmx !== null && rng.tmn !== null && rng.tmx - rng.tmn >= 10) {
+    out.push({ ic: icon('sun', 16), title: '일교차', msg: '일교차가 10° 이상입니다. 겉옷을 챙기세요', val: deg(rng.tmx - rng.tmn) });
+  }
+  return out;
+}
 
-  const COL = 62;
-  const cols = d.hourly.map((h, i) => `
-    <div class="hc${i === 0 ? ' cur' : ''}">
-      <div class="t">${i === 0 ? '지금' : (h.hour === 0 ? '내일' : pad2(h.hour) + '시')}</div>
-      <div class="i">${h.icon}</div>
-      <div class="p">${h.pop ? pop(h.pop) : ''}</div>
-      <div class="d">${fmt(h.temp)}</div>
-    </div>`).join('');
+/* ---------- 화면 그리기 ---------- */
+function render(d) {
+  const now = kstNow();
+  const nowKey = now.date + pad2(now.hour);
+  // 빌드 이후 시간이 흘렀으면 지난 시간은 빼고 지금 시각부터 보여 준다.
+  let hourly = d.hourly.filter((h) => h.date + pad2(h.hour) >= nowKey);
+  if (hourly.length < 6) hourly = d.hourly;
+  const cur = hourly[0] || d.current;
+  theme(cur ? kindOf(cur.text, isNight(cur.hour)) : 'sun', cur ? cur.hour : now.hour);
 
-  const days = d.daily.map((x, i) => {
-    const same = x.am.icon === x.pm.icon;
-    return `
-    <div class="day${i === 0 ? ' today' : ''}">
-      <div class="n">${i === 0 ? '오늘' : x.dow + '요일'}<small>${md(x.date)}</small></div>
-      <div class="ic" title="${x.am.text}${same ? '' : ' → ' + x.pm.text}">
-        <span>${x.am.icon}</span>${same ? '' : '<span class="arrow">▶</span>'}${same ? '' : `<span>${x.pm.icon}</span>`}
+  const loc = esc(d.location || '내 지역');
+  const rng = d.today_range;
+  const todayHours = hourly.filter((h) => h.date === d.today);
+
+  // ③ 시간별
+  const COL = 64;
+  const cols = hourly.map((h, i) => {
+    const label = i === 0 ? '지금' : h.hour === 0 ? '내일' : ampm(h.hour);
+    return `<div class="hc">
+      <div class="t${i === 0 || h.hour === 0 ? ' mark' : ''}">${label}</div>
+      <div class="i">${icon(kindOf(h.text, isNight(h.hour)), 30)}</div>
+      <div class="p">${UMB}${h.pop ?? 0}%</div>
+    </div>`;
+  }).join('');
+  let lastDate = '';
+  const list = hourly.map((h) => {
+    const head = h.date !== lastDate ? `<div class="hl-date">${+h.date.slice(4, 6)}월 ${+h.date.slice(6, 8)}일</div>` : '';
+    lastDate = h.date;
+    return `${head}<div class="hl-row"><span>${ampm(h.hour)}</span>${icon(kindOf(h.text, isNight(h.hour)), 24)}<span class="p">${UMB}${h.pop ?? 0}%</span><span class="d">${deg(h.temp)}</span></div>`;
+  }).join('');
+
+  // ④ 안내 카드
+  const tipList = tips(d);
+  const tipHtml = tipList.length ? `
+    <section class="card">
+      <div class="carousel" id="carousel">${tipList.map((t) => `
+        <div class="slide">
+          <div class="card-head">${t.ic} ${esc(t.title)}</div>
+          <div class="body"><div class="msg">${esc(t.msg)}</div><div class="val">${esc(t.val)}</div></div>
+        </div>`).join('')}
       </div>
-      <div class="r">${pop(x.pop)}</div>
-      <div class="m"><span class="lo">${fmt(x.tmn)}</span><span class="sl">/</span>${fmt(x.tmx)}</div>
+      ${tipList.length > 1 ? `<div class="dots" id="dots">${tipList.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
+    </section>` : '';
+
+  // ⑤ 주간 (처음 7줄, 나머지는 펼치기)
+  const SHOW = 7;
+  const yRow = d.yesterday?.tmx != null
+    ? `<div class="day past"><div class="n">어제</div><div></div><div></div><div></div><div class="m">${deg(d.yesterday.tmx)}<span class="lo">${deg(d.yesterday.tmn)}</span></div></div>` : '';
+  const days = d.daily.map((x, i) => {
+    const am = kindOf(x.am.text);
+    let pm = kindOf(x.pm.text);
+    // 강수확률이 높은데 아이콘에 비가 없으면 비 아이콘으로 표시
+    if ((x.pop ?? 0) >= 60 && !isWet(am) && !isWet(pm)) pm = 'rain';
+    const extra = i >= SHOW;
+    return `<div class="day${extra ? ' extra' : ''}"${extra ? ' hidden' : ''}>
+      <div class="n">${i === 0 ? '오늘' : x.dow}</div>
+      <div class="r">${x.pop != null ? UMB + x.pop + '%' : ''}</div>
+      <div class="ic" title="${esc(x.am.text)}">${icon(am)}</div>
+      <div class="ic" title="${esc(x.pm.text)}">${icon(pm)}</div>
+      <div class="m">${deg(x.tmx)}<span class="lo">${deg(x.tmn)}</span></div>
     </div>`;
   }).join('');
 
+  const u = d.updatedKst; // "YYYYMMDD HH:MM"
+  const uh = +u.slice(9, 11);
+  const updated = `${+u.slice(4, 6)}. ${+u.slice(6, 8)}. ${uh < 12 ? '오전' : '오후'} ${uh % 12 || 12}:${u.slice(12, 14)}`;
+
+  $('#pill').innerHTML = `<span>${PIN}${loc}</span>`;
   $('#app').innerHTML = `
-    <div class="top">
-      <div class="loc">📍 ${d.location || '내 지역'}</div>
-      <div class="upd">${d.updatedKst.slice(4, 6)}.${d.updatedKst.slice(6, 8)} ${d.updatedKst.slice(9)} 업데이트</div>
-      <div class="now">
-        <div class="temp">${cur ? Math.round(cur.temp) : '-'}<sup>°</sup></div>
-        <div class="big-icon">${cur ? cur.icon : ''}</div>
-      </div>
-      <div class="desc">${cur ? cur.text : ''}</div>
-      <div class="range">최저 ${rng ? fmt(rng.tmn) : '-'} / 최고 ${rng ? fmt(rng.tmx) : '-'}</div>
-    </div>
-    <section>
-      <h2>시간별 예보</h2>
-      <div class="scroll"><div class="hrow">
-        <div class="cols">${cols}</div>
-        ${graph(d.hourly, COL)}
-      </div></div>
+    <header class="hero" id="hero">
+      <div class="loc">${PIN}${loc}</div>
+      <div class="temp">${cur ? Math.round(cur.temp) : '-'}°</div>
+      <div class="desc">${cur ? esc(cur.text) : ''}</div>
+      <div class="grow"></div>
+      <div class="hl">↑${rng ? deg(rng.tmx) : '-'} / ↓${rng ? deg(rng.tmn) : '-'}</div>
+      ${cur?.feels != null ? `<div class="feel">체감온도 ${deg(cur.feels)}</div>` : ''}
+    </header>
+
+    <section class="card">
+      <p class="summary">${summaryText(todayHours.length ? todayHours : hourly.slice(0, 12), rng)}</p>
+      <div class="divider"></div>
+      <div class="scroll"><div class="hrow"><div class="cols">${cols}</div>${graph(hourly, COL)}</div></div>
+      <div class="hlist" id="hlist" hidden>${list}</div>
+      <button class="more" data-target="hlist" aria-expanded="false">${hourly.length}시간 날씨 예보 ${CHEV}</button>
     </section>
-    <section><h2>주간 예보</h2>${days}</section>
-    <div class="foot">기상청 예보 기준</div>`;
+
+    ${tipHtml}
+
+    <section class="card">
+      ${yRow}${days}
+      ${d.daily.length > SHOW ? `<button class="more" data-target="extra" aria-expanded="false">${d.daily.length}일 날씨 예보 ${CHEV}</button>` : ''}
+    </section>
+
+    <footer class="foot">출처: 기상청<br>업데이트 ${updated}</footer>`;
+
+  bind();
+}
+
+/* ---------- 동작: 펼치기, 캐러셀 점, 스크롤 효과 ---------- */
+function bind() {
+  document.querySelectorAll('.more').forEach((btn) => btn.addEventListener('click', () => {
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', open);
+    if (btn.dataset.target === 'extra') document.querySelectorAll('.day.extra').forEach((el) => (el.hidden = !open));
+    else $('#' + btn.dataset.target).hidden = !open;
+  }));
+
+  const car = $('#carousel'), dots = $('#dots');
+  if (car && dots) car.addEventListener('scroll', () => {
+    const i = Math.round(car.scrollLeft / car.clientWidth);
+    [...dots.children].forEach((el, j) => el.classList.toggle('on', i === j));
+  }, { passive: true });
+
+  // 스크롤하면 히어로는 서서히 투명해지고, 알약 지역명이 나타난다.
+  const hero = $('#hero'), pill = $('#pill');
+  const onScroll = () => {
+    const y = window.scrollY;
+    hero.style.opacity = Math.max(0, 1 - y / (hero.offsetHeight * 0.7)).toFixed(3);
+    const on = y > 50;
+    pill.classList.toggle('on', on);
+    pill.setAttribute('aria-hidden', String(!on));
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 }
 
 fetch('weather.json', { cache: 'no-store' })
   .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then(render)
-  .catch(() => { $('#app').innerHTML = '<div class="err">날씨 데이터를 불러오지 못했습니다.</div>'; });
+  .catch((e) => { console.error(e); $('#app').innerHTML = '<div class="err">날씨 데이터를 불러오지 못했습니다.</div>'; });
 </script>
 </body>
 </html>
