@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 안드로이드 maskable 아이콘: 배경은 가장자리까지 꽉 채우고, 그림은 가운데 안전 영역(지름 80%) 안에 둔다 -->
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc0f2"/><stop offset="1" stop-color="#2f6fd6"/></linearGradient></defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 262) scale(.72) translate(-262 -290)">
+    <circle cx="310" cy="200" r="96" fill="#ffd54a"/>
+    <g fill="#fff"><circle cx="176" cy="320" r="76"/><circle cx="262" cy="270" r="98"/><circle cx="346" cy="326" r="70"/><rect x="176" y="310" width="170" height="86"/></g>
+  </g>
+</svg>

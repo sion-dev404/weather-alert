@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- 안드로이드 상태 표시줄용 단색 알림 배지 (흰색 실루엣, 투명 배경) -->
+  <g fill="#fff">
+    <circle cx="60" cy="34" r="17"/>
+    <circle cx="30" cy="60" r="14"/><circle cx="47" cy="51" r="18"/><circle cx="64" cy="61" r="13"/><rect x="30" y="58" width="34" height="17"/>
+  </g>
+</svg>
