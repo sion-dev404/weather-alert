@@ -1,0 +1,13 @@
+{
+  "name": "오늘의 날씨",
+  "short_name": "날씨",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#2f6fd6",
+  "theme_color": "#4a90e2",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

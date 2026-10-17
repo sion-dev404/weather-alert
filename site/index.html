@@ -4,13 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#4a90e2" id="theme">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="오늘의 날씨">
 <title>오늘의 날씨</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
   :root {
     --bg-a: #7cc0f2; --bg-b: #2f6fd6;
     --card: rgba(255,255,255,.17); --line: rgba(255,255,255,.2);
-    --sub: rgba(255,255,255,.8); --dim: rgba(255,255,255,.55);
+    --sub: rgba(255,255,255,.8);
     --sun: #ffd54a; --graph: #f7dc4f;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -23,23 +28,38 @@
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
   main { position: relative; max-width: 480px; margin: 0 auto; padding: 0 16px 32px; }
 
-  /* 맑은 낮의 햇빛 번짐 (오른쪽 위 고정) */
-  .glare {
-    position: fixed; top: -120px; right: -120px; width: 420px; height: 420px; pointer-events: none; display: none;
-    background: radial-gradient(circle, rgba(255,255,255,.95) 0 10%, rgba(255,255,255,.45) 22%, rgba(255,255,255,.12) 45%, transparent 70%);
-    animation: glow 6s ease-in-out infinite alternate;
-  }
-  body.sunny .glare { display: block; }
-  @keyframes glow { from { opacity: .8; } to { opacity: 1; } }
+  /* 컴퓨터처럼 넓은 화면에서는 전체를 키운다 */
+  @media (min-width: 700px) { main, .pill { zoom: 1.2; } }
+  @media (min-width: 1100px) { main, .pill { zoom: 1.35; } }
 
   /* ① 히어로 */
-  .hero { min-height: 40vh; display: flex; flex-direction: column; padding: calc(24px + env(safe-area-inset-top)) 4px 20px; }
+  .hero { position: relative; min-height: clamp(290px, 40vh, 360px); display: flex; flex-direction: column; padding: calc(24px + env(safe-area-inset-top)) 4px 20px; }
   .loc { display: flex; align-items: center; gap: 6px; font-size: 22px; font-weight: 600; }
-  .temp { font-size: 96px; font-weight: 200; line-height: 1; margin-top: 18px; letter-spacing: -2px; }
-  .desc { font-size: 22px; font-weight: 600; margin-top: 6px; }
+  .temp { font-size: 96px; font-weight: 700; line-height: 1; margin-top: 18px; letter-spacing: -3px; }
+  .desc { font-size: 22px; font-weight: 700; margin-top: 6px; }
   .hero .grow { flex: 1; min-height: 24px; }
-  .hl, .feel { font-size: 16px; font-weight: 500; }
+  .hl, .feel { font-size: 16px; font-weight: 600; }
   .feel { margin-top: 4px; }
+
+  /* 기온 옆 날씨 그림 */
+  .scene { position: absolute; right: -6px; top: calc(36px + env(safe-area-inset-top)); width: 176px; height: 176px; pointer-events: none; }
+  .scene svg { width: 100%; height: 100%; overflow: visible; }
+  .scene * { transform-box: fill-box; transform-origin: center; }
+  .spin { animation: spin 24s linear infinite; }
+  .pulse { animation: pulse 3s ease-in-out infinite alternate; }
+  .drift { animation: drift 7s ease-in-out infinite alternate; }
+  .drift.slow { animation-duration: 11s; animation-direction: alternate-reverse; }
+  .sway { transform-origin: 50% 100% !important; animation: sway 3.2s ease-in-out infinite alternate; }
+  .fall { animation: fall 1.1s linear infinite; }
+  .flake { animation: flake 3.6s linear infinite; }
+  .twinkle { animation: twinkle 2.4s ease-in-out infinite alternate; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { from { opacity: .55; transform: scale(.94); } to { opacity: 1; transform: scale(1.06); } }
+  @keyframes drift { from { transform: translateX(-10px); } to { transform: translateX(10px); } }
+  @keyframes sway { from { transform: rotate(-14deg); } to { transform: rotate(-4deg); } }
+  @keyframes fall { from { transform: translate(0, -24px); opacity: 0; } 15% { opacity: 1; } to { transform: translate(-10px, 40px); opacity: 0; } }
+  @keyframes flake { from { transform: translate(0, -20px); opacity: 0; } 15% { opacity: 1; } to { transform: translate(8px, 60px); opacity: 0; } }
+  @keyframes twinkle { from { opacity: .25; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
 
   /* ② 스크롤 시 고정되는 알약 지역명 */
   .pillbar { position: fixed; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 5; pointer-events: none; }
@@ -91,7 +111,7 @@
   .slide { flex: 0 0 100%; scroll-snap-align: start; padding: 0 20px; }
   .slide .body { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; min-height: 44px; }
   .slide .msg { font-size: 15px; font-weight: 600; line-height: 1.45; }
-  .slide .val { font-size: 26px; font-weight: 500; white-space: nowrap; }
+  .slide .val { font-size: 26px; font-weight: 600; white-space: nowrap; }
   .dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
   .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.4); }
   .dots i.on { background: #fff; }
@@ -106,22 +126,40 @@
   .day.past { color: var(--sub); }
   .day.extra[hidden] { display: none; }
 
+  /* 알림 설정 버튼 */
+  .notify-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 12px;
+    padding: 16px; border-radius: 24px; background: var(--card); font-size: 15px; font-weight: 600;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  }
+  .notify-btn:disabled { opacity: .6; cursor: default; }
+  .notify-panel { font-size: 13px; line-height: 1.6; color: var(--sub); }
+  .notify-panel[hidden] { display: none; }
+  .notify-panel b { color: #fff; }
+  .notify-panel textarea {
+    width: 100%; height: 88px; margin: 10px 0 8px; padding: 10px; border: 0; border-radius: 12px; resize: none;
+    background: rgba(0,0,0,.2); color: #fff; font: 11px/1.4 ui-monospace, Consolas, monospace;
+  }
+  .notify-panel .row { display: flex; gap: 8px; }
+  .notify-panel .row button { flex: 1; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.22); color: #fff; font-weight: 600; font-size: 13px; }
+
   /* ⑨ 하단 */
   .foot { color: var(--sub); font-size: 12px; line-height: 2; padding: 20px 8px 0; }
   .err { text-align: center; padding: 120px 0; color: var(--sub); }
 
   @media (prefers-reduced-motion: reduce) {
-    .glare { animation: none; }
+    .scene * { animation: none !important; }
     .pill, .more svg { transition: none; }
-    .carousel { scroll-behavior: auto; }
   }
 </style>
 </head>
 <body>
-<div class="glare" aria-hidden="true"></div>
 <div class="pillbar"><div class="pill" id="pill" aria-hidden="true"></div></div>
 <main id="app"><div class="err">불러오는 중…</div></main>
 <script>
+// 웹 푸시 공개키 (VAPID 공개키는 공개해도 되는 값)
+const VAPID_PUBLIC_KEY = 'BODcsz4QDVlouv3joGz86D2LKnAxR-hHRP7n3S0WNuNoiqFlke7JdJtIdynZ491m0Ihyh83ns92swAfjA63SMUg';
+
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const deg = (v) => (v === null || v === undefined ? '-' : Math.round(v) + '°');
@@ -135,10 +173,11 @@ function kstNow() {
   return { date: `${k.getUTCFullYear()}${pad2(k.getUTCMonth() + 1)}${pad2(k.getUTCDate())}`, hour: k.getUTCHours() };
 }
 
-/* ---------- 날씨 아이콘 (직접 그린 SVG) ---------- */
+/* ---------- 작은 날씨 아이콘 (직접 그린 SVG) ---------- */
 const PIN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const UMB = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 0 1 6.5 6.5h-13A6.5 6.5 0 0 1 8 1.5z"/><path d="M8 8v5a1.5 1.5 0 0 1-3 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
 const CHEV = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>';
+const BELL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/></svg>';
 
 const cloud = (fill, t = '') => `<g fill="${fill}" transform="${t}"><circle cx="11" cy="19" r="5.5"/><circle cx="17" cy="15" r="7"/><circle cx="23" cy="19.5" r="5"/><rect x="11" y="18" width="12" height="6.5"/></g>`;
 const slashes = (xs, y1 = 13, y2 = 25) => xs.map((x) => `<line x1="${x + 5}" y1="${y1}" x2="${x}" y2="${y2}"/>`).join('');
@@ -166,6 +205,81 @@ function kindOf(text, night) {
 const icon = (kind, size = 28) => `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">${ICONS[kind] || ''}</svg>`;
 const isWet = (k) => ['rain', 'shower', 'snow', 'rainsnow'].includes(k);
 
+/* ---------- 기온 옆 큰 그림: 날씨에 맞는 물건 + 움직임 ---------- */
+const S = {
+  // 선글라스를 낀 해 + 빛살 회전 + 빛 번짐
+  sun: () => `
+    ${glow(80, 80, 80, '#fff6c4')}
+    <g class="spin" stroke="#ffd54a" stroke-width="7" stroke-linecap="round">
+      ${Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; return `<line x1="${80 + 50 * Math.cos(a)}" y1="${80 + 50 * Math.sin(a)}" x2="${80 + 64 * Math.cos(a)}" y2="${80 + 64 * Math.sin(a)}"/>`; }).join('')}
+    </g>
+    <circle cx="80" cy="80" r="40" fill="#ffd54a"/>
+    <g fill="#22303f"><rect x="55" y="68" width="22" height="15" rx="7"/><rect x="83" y="68" width="22" height="15" rx="7"/></g>
+    <path d="M77 72h6" stroke="#22303f" stroke-width="3"/>
+    <path d="M68 95q12 9 24 0" fill="none" stroke="#c98a12" stroke-width="3.5" stroke-linecap="round"/>`,
+  // 해 + 흘러가는 구름
+  partly: () => `
+    ${glow(104, 60, 62, '#fff6c4')}
+    <circle cx="104" cy="60" r="32" fill="#ffd54a"/>
+    <g class="drift">${cloud('#fff', 'translate(30 46) scale(3.8)')}</g>`,
+  // 겹친 구름 두 개가 천천히 흐름
+  cloudy: () => `
+    <g class="drift slow">${cloud('#c3ccd6', 'translate(58 6) scale(3.2)')}</g>
+    <g class="drift">${cloud('#eef2f5', 'translate(26 50) scale(4)')}</g>`,
+  // 흔들리는 노란 우산 + 떨어지는 빗방울
+  rain: (extra = '') => `
+    ${drops(14)}${extra}
+    <g class="sway">
+      <path d="M80 26v6" stroke="#5b3a29" stroke-width="4" stroke-linecap="round"/>
+      <path d="M18 82Q22 30 80 30Q138 30 142 82Q127 72 111 82Q96 72 80 82Q64 72 49 82Q34 72 18 82z" fill="#ffcf3f"/>
+      <path d="M80 30Q60 50 49 82M80 30Q100 50 111 82" fill="none" stroke="#f0a92a" stroke-width="3"/>
+      <path d="M80 80v54a10 10 0 0 1-20 0" fill="none" stroke="#5b3a29" stroke-width="5" stroke-linecap="round"/>
+    </g>`,
+  shower: () => S.rain(`<circle class="pulse" cx="136" cy="22" r="20" fill="#ffd54a"/>`),
+  // 목도리를 두른 눈사람 + 내리는 눈송이
+  snow: (extraDrops = '') => `
+    ${flakes(12)}${extraDrops}
+    <g class="sway" style="animation-duration:4s">
+      <circle cx="80" cy="118" r="34" fill="#fff"/>
+      <circle cx="80" cy="64" r="25" fill="#fff"/>
+      <rect x="54" y="82" width="52" height="10" rx="5" fill="#e5484d"/>
+      <rect x="88" y="86" width="10" height="24" rx="5" fill="#e5484d"/>
+      <circle cx="71" cy="60" r="3.2" fill="#22303f"/><circle cx="89" cy="60" r="3.2" fill="#22303f"/>
+      <path d="M80 66l16 4-16 3z" fill="#ff8a3d"/>
+      <path d="M48 110L22 94M112 110l26-16" stroke="#7a5233" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="80" cy="112" r="3" fill="#22303f"/><circle cx="80" cy="126" r="3" fill="#22303f"/>
+    </g>`,
+  rainsnow: () => S.snow(drops(6)),
+  // 달 + 반짝이는 별
+  moon: () => `
+    ${glow(90, 74, 76, '#fff6d6')}
+    <path d="M96 22a54 54 0 1 0 40 92A46 46 0 0 1 96 22z" fill="#ffe9a8"/>
+    ${stars()}`,
+  partlyNight: () => `${S.moon()}<g class="drift">${cloud('#d9e1ea', 'translate(30 60) scale(3.8)')}</g>`,
+};
+// 부드러운 빛 번짐 (가운데 밝고 바깥으로 사라짐)
+function glow(cx, cy, r, color) {
+  return `<defs><radialGradient id="g${cx}${cy}"><stop offset="0" stop-color="${color}" stop-opacity=".85"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>
+    <circle class="pulse" cx="${cx}" cy="${cy}" r="${r}" fill="url(#g${cx}${cy})"/>`;
+}
+function drops(n) {
+  return `<g stroke="#e3eeff" stroke-width="3" stroke-linecap="round">${Array.from({ length: n }, (_, i) => {
+    const x = 10 + ((i * 37) % 150), y = 80 + ((i * 53) % 70);
+    return `<line class="fall" style="animation-delay:-${((i * 0.27) % 1.1).toFixed(2)}s" x1="${x + 4}" y1="${y}" x2="${x}" y2="${y + 12}"/>`;
+  }).join('')}</g>`;
+}
+function flakes(n) {
+  return `<g fill="#fff">${Array.from({ length: n }, (_, i) => {
+    const x = 6 + ((i * 41) % 156), y = 10 + ((i * 29) % 110);
+    return `<circle class="flake" style="animation-delay:-${((i * 0.6) % 3.6).toFixed(2)}s" cx="${x}" cy="${y}" r="${2.5 + (i % 3)}"/>`;
+  }).join('')}</g>`;
+}
+function stars() {
+  return [[24, 30, 6], [150, 20, 5], [36, 120, 4], [146, 128, 6], [16, 76, 3]].map(([x, y, r], i) =>
+    `<path class="twinkle" style="animation-delay:-${i * 0.5}s" d="M${x} ${y - r * 1.6}Q${x} ${y} ${x + r * 1.6} ${y}Q${x} ${y} ${x} ${y + r * 1.6}Q${x} ${y} ${x - r * 1.6} ${y}Q${x} ${y} ${x} ${y - r * 1.6}z" fill="#fff4c2"/>`).join('');
+}
+const scene = (kind) => `<svg viewBox="0 0 160 160" aria-hidden="true">${(S[kind] || S.sun)()}</svg>`;
+
 /* ---------- 배경: 날씨·시간대 ---------- */
 function theme(kind, hour) {
   const night = isNight(hour);
@@ -179,7 +293,6 @@ function theme(kind, hour) {
   const r = document.documentElement.style;
   r.setProperty('--bg-a', a); r.setProperty('--bg-b', b);
   $('#theme').setAttribute('content', a);
-  document.body.classList.toggle('sunny', kind === 'sun' && !night && !twilight);
 }
 
 /* ---------- 시간별 기온 그래프 (노란 선 + 흰 점, 숫자는 점 아래) ---------- */
@@ -220,7 +333,7 @@ function tips(d) {
     const what = /눈/.test(x.am.text + x.pm.text) ? '눈' : '비';
     out.push({ ic: icon('rain', 16), title: `${what} 예보`, msg: `${dayName(x, rainIdx)}${when} ${what === '눈' ? '눈이' : '비가'} 내릴 가능성이 있습니다`, val: x.pop != null ? x.pop + '%' : '' });
   }
-  // 어제 기온 데이터가 생기면 표시된다 (2단계 데이터 추가 후)
+  // 어제 기온 데이터가 생기면 표시된다 (데이터 추가 단계 이후)
   if (d.yesterday?.tmx != null && d.today_range?.tmx != null) {
     const diff = Math.round(d.today_range.tmx - d.yesterday.tmx);
     const msg = diff === 0 ? '어제와 기온이 비슷합니다' : `어제보다 기온이 ${Math.abs(diff) <= 2 ? '약간 ' : ''}${diff > 0 ? '높습니다' : '낮습니다'}`;
@@ -241,7 +354,8 @@ function render(d) {
   let hourly = d.hourly.filter((h) => h.date + pad2(h.hour) >= nowKey);
   if (hourly.length < 6) hourly = d.hourly;
   const cur = hourly[0] || d.current;
-  theme(cur ? kindOf(cur.text, isNight(cur.hour)) : 'sun', cur ? cur.hour : now.hour);
+  const curKind = cur ? kindOf(cur.text, isNight(cur.hour)) : 'sun';
+  theme(curKind, cur ? cur.hour : now.hour);
 
   const loc = esc(d.location || '내 지역');
   const rng = d.today_range;
@@ -303,6 +417,7 @@ function render(d) {
   $('#pill').innerHTML = `<span>${PIN}${loc}</span>`;
   $('#app').innerHTML = `
     <header class="hero" id="hero">
+      <div class="scene">${scene(curKind)}</div>
       <div class="loc">${PIN}${loc}</div>
       <div class="temp">${cur ? Math.round(cur.temp) : '-'}°</div>
       <div class="desc">${cur ? esc(cur.text) : ''}</div>
@@ -326,9 +441,13 @@ function render(d) {
       ${d.daily.length > SHOW ? `<button class="more" data-target="extra" aria-expanded="false">${d.daily.length}일 날씨 예보 ${CHEV}</button>` : ''}
     </section>
 
+    <button class="notify-btn" id="notifyBtn">${BELL}<span>아침 알림 설정하기</span></button>
+    <section class="card notify-panel" id="notifyPanel" hidden></section>
+
     <footer class="foot">출처: 기상청<br>업데이트 ${updated}</footer>`;
 
   bind();
+  setupNotify();
 }
 
 /* ---------- 동작: 펼치기, 캐러셀 점, 스크롤 효과 ---------- */
@@ -357,6 +476,74 @@ function bind() {
   };
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
+}
+
+/* ---------- 웹 알림(웹 푸시) 설정 ---------- */
+const b64ToBytes = (s) => {
+  const b = atob((s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(b, (c) => c.charCodeAt(0));
+};
+
+async function setupNotify() {
+  const btn = $('#notifyBtn'), panel = $('#notifyPanel'), label = btn.querySelector('span');
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const ios = /iPhone|iPad/.test(navigator.userAgent);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+  const show = (html) => { panel.innerHTML = html; panel.hidden = false; };
+
+  // 구독 정보를 보여 주고 복사할 수 있게 한다 (GitHub Secret PUSH_SUBSCRIPTION에 붙여 넣는 용도)
+  const showSub = (sub) => {
+    show(`<b>알림이 켜졌습니다.</b><br>
+      아래 구독 정보를 복사해 GitHub 저장소의 <b>Settings → Secrets and variables → Actions</b>에
+      <b>PUSH_SUBSCRIPTION</b> 이름으로 저장하면 매일 아침 알림이 옵니다.
+      <textarea id="subText" readonly>${esc(JSON.stringify(sub))}</textarea>
+      <div class="row"><button id="copyBtn">구독 정보 복사</button><button id="testBtn">테스트 알림</button></div>`);
+    $('#copyBtn').onclick = async () => {
+      const t = $('#subText');
+      try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
+      $('#copyBtn').textContent = '복사했습니다';
+    };
+    $('#testBtn').onclick = async () => {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification('오늘의 날씨', { body: '알림이 잘 도착했습니다.', icon: 'icon.svg', tag: 'test' });
+    };
+  };
+
+  if (!supported) {
+    btn.onclick = () => show(ios && !standalone
+      ? '아이폰은 Safari에서 <b>공유 → 홈 화면에 추가</b>를 한 뒤, 홈 화면 아이콘으로 열어서 알림을 설정할 수 있습니다.'
+      : '이 브라우저는 웹 알림을 지원하지 않습니다. Chrome이나 Edge, Safari 최신 버전에서 열어 주세요.');
+    return;
+  }
+
+  const reg = await navigator.serviceWorker.register('sw.js');
+  const existing = await reg.pushManager.getSubscription();
+  if (existing && Notification.permission === 'granted') label.textContent = '알림 켜짐 · 구독 정보 보기';
+
+  btn.onclick = async () => {
+    if (Notification.permission === 'denied') {
+      show('알림이 차단되어 있습니다. 주소창 왼쪽의 <b>사이트 설정</b>에서 알림을 <b>허용</b>으로 바꾼 뒤 다시 눌러 주세요.');
+      return;
+    }
+    btn.disabled = true;
+    try {
+      if ((await Notification.requestPermission()) !== 'granted') {
+        show('알림 권한을 허용해야 아침 알림을 받을 수 있습니다.');
+        return;
+      }
+      const ready = await navigator.serviceWorker.ready;
+      const sub = (await ready.pushManager.getSubscription())
+        || (await ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) }));
+      label.textContent = '알림 켜짐 · 구독 정보 보기';
+      showSub(sub.toJSON());
+    } catch (e) {
+      console.error(e);
+      show(`알림 설정에 실패했습니다: ${esc(e.message)}`);
+    } finally {
+      btn.disabled = false;
+    }
+  };
 }
 
 fetch('weather.json', { cache: 'no-store' })
