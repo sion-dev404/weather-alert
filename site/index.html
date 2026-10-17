@@ -34,7 +34,9 @@
 
   /* ① 히어로 */
   .hero { position: relative; min-height: clamp(290px, 40vh, 360px); display: flex; flex-direction: column; padding: calc(24px + env(safe-area-inset-top)) 4px 20px; }
-  .loc { display: flex; align-items: center; gap: 6px; font-size: 22px; font-weight: 600; }
+  .loc { display: flex; align-items: center; gap: 6px; font-size: 22px; font-weight: 600; text-align: left; align-self: flex-start; }
+  .loc .gps { opacity: .7; margin-left: 2px; }
+  .loc.busy .gps { animation: pulse .8s ease-in-out infinite alternate; }
   .temp { font-size: 96px; font-weight: 700; line-height: 1; margin-top: 18px; letter-spacing: -3px; }
   .desc { font-size: 22px; font-weight: 700; margin-top: 6px; }
   .hero .grow { flex: 1; min-height: 24px; }
@@ -140,6 +142,7 @@
     width: 100%; height: 88px; margin: 10px 0 8px; padding: 10px; border: 0; border-radius: 12px; resize: none;
     background: rgba(0,0,0,.2); color: #fff; font: 11px/1.4 ui-monospace, Consolas, monospace;
   }
+  .notify-panel #locText { height: 44px; }
   .notify-panel .row { display: flex; gap: 8px; }
   .notify-panel .row button { flex: 1; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.22); color: #fff; font-weight: 600; font-size: 13px; }
 
@@ -176,6 +179,7 @@ function kstNow() {
 /* ---------- 작은 날씨 아이콘 (직접 그린 SVG) ---------- */
 const PIN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const UMB = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 0 1 6.5 6.5h-13A6.5 6.5 0 0 1 8 1.5z"/><path d="M8 8v5a1.5 1.5 0 0 1-3 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+const GPS = '<svg class="gps" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
 const CHEV = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>';
 const BELL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/></svg>';
 
@@ -414,17 +418,18 @@ function render(d) {
   const uh = +u.slice(9, 11);
   const updated = `${+u.slice(4, 6)}. ${+u.slice(6, 8)}. ${uh < 12 ? '오전' : '오후'} ${uh % 12 || 12}:${u.slice(12, 14)}`;
 
-  $('#pill').innerHTML = `<span>${PIN}${loc}</span>`;
+  $('#pill').innerHTML = `<span>${PIN}<span class="loc-name">${loc}</span></span>`;
   $('#app').innerHTML = `
     <header class="hero" id="hero">
       <div class="scene">${scene(curKind)}</div>
-      <div class="loc">${PIN}${loc}</div>
+      <button class="loc" id="locBtn" title="내 위치로 지역 확인">${PIN}<span class="loc-name">${loc}</span>${GPS}</button>
       <div class="temp">${cur ? Math.round(cur.temp) : '-'}°</div>
       <div class="desc">${cur ? esc(cur.text) : ''}</div>
       <div class="grow"></div>
       <div class="hl">↑${rng ? deg(rng.tmx) : '-'} / ↓${rng ? deg(rng.tmn) : '-'}</div>
       ${cur?.feels != null ? `<div class="feel">체감온도 ${deg(cur.feels)}</div>` : ''}
     </header>
+    <section class="card notify-panel" id="locPanel" hidden></section>
 
     <section class="card">
       <p class="summary">${summaryText(todayHours.length ? todayHours : hourly.slice(0, 12), rng)}</p>
@@ -448,6 +453,95 @@ function render(d) {
 
   bind();
   setupNotify();
+  setupLocation(d);
+}
+
+/* ---------- 내 위치: 브라우저 위치정보 → 동 이름 + 기상청 격자 ---------- */
+// 위경도 → 기상청 단기예보 격자 (기상청 공개 변환식)
+function latLonToGrid(lat, lon) {
+  const D = Math.PI / 180, re = 6371.00877 / 5.0;
+  const s1 = 30 * D, s2 = 60 * D, olon = 126 * D, olat = 38 * D;
+  let sn = Math.tan(Math.PI / 4 + s2 / 2) / Math.tan(Math.PI / 4 + s1 / 2);
+  sn = Math.log(Math.cos(s1) / Math.cos(s2)) / Math.log(sn);
+  const sf = (Math.pow(Math.tan(Math.PI / 4 + s1 / 2), sn) * Math.cos(s1)) / sn;
+  const ro = (re * sf) / Math.pow(Math.tan(Math.PI / 4 + olat / 2), sn);
+  const ra = (re * sf) / Math.pow(Math.tan(Math.PI / 4 + (lat * D) / 2), sn);
+  let th = lon * D - olon;
+  if (th > Math.PI) th -= 2 * Math.PI;
+  if (th < -Math.PI) th += 2 * Math.PI;
+  th *= sn;
+  return { nx: Math.floor(ra * Math.sin(th) + 43 + 0.5), ny: Math.floor(ro - ra * Math.cos(th) + 136 + 0.5) };
+}
+const pickPlace = (a = {}) => a.quarter || a.suburb || a.neighbourhood || a.village || a.town || a.borough || a.city_district || a.city || '';
+
+// 마지막으로 확인한 위치는 이 브라우저에만 저장 (편의용, 없어도 동작)
+const LOC_KEY = 'weather-alert:loc';
+const locStore = {
+  get() { try { return JSON.parse(localStorage.getItem(LOC_KEY)); } catch { return null; } },
+  set(v) { try { localStorage.setItem(LOC_KEY, JSON.stringify(v)); } catch { /* 저장 불가 환경 무시 */ } },
+};
+
+async function locate() {
+  const pos = await new Promise((ok, no) => navigator.geolocation.getCurrentPosition(ok, no, { timeout: 15000, maximumAge: 10 * 60e3 }));
+  const { latitude: lat, longitude: lon } = pos.coords;
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=ko&lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`지역명 조회 실패 (${r.status})`);
+  return { name: pickPlace((await r.json()).address), ...latLonToGrid(lat, lon) };
+}
+
+function setupLocation(d) {
+  const btn = $('#locBtn'), panel = $('#locPanel');
+  const grid = d.grid; // 지금 날씨 데이터의 기준 격자
+  const setName = (name) => document.querySelectorAll('.loc-name').forEach((el) => (el.textContent = name));
+  const say = (html) => { panel.innerHTML = html; panel.hidden = false; };
+
+  const apply = (loc, fromUser) => {
+    if (!loc?.name) return;
+    const sameGrid = !grid || (loc.nx === grid.nx && loc.ny === grid.ny);
+    // 날씨 기준 격자와 같을 때만 이름을 바꾼다 (다르면 다른 동네 날씨에 내 동네 이름이 붙으므로)
+    if (sameGrid) setName(loc.name);
+    const needRegister = !sameGrid || loc.name !== d.location;
+    if (!needRegister || (loc.dismissed && !fromUser)) { panel.hidden = true; return; }
+
+    const text = JSON.stringify({ NX: loc.nx, NY: loc.ny, LOCATION_NAME: loc.name });
+    say(`<b>현재 위치: ${esc(loc.name)}</b><br>${sameGrid
+      ? '날씨 기준 지역은 같습니다. 아침 알림 제목에도 이 이름이 나오게 하려면 아래 내용을 복사해 등록하세요.'
+      : `지금 보이는 날씨는 다른 지역(${esc(d.location || '기존 지역')}) 기준입니다. 이 위치의 날씨를 받으려면 아래 내용을 복사해 등록하세요.`}
+      <textarea id="locText" readonly>${esc(text)}</textarea>
+      <div class="row"><button id="locCopy">위치 정보 복사</button><button id="locClose">닫기</button></div>`);
+    $('#locCopy').onclick = async () => {
+      const t = $('#locText');
+      try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
+      $('#locCopy').textContent = '복사했습니다';
+    };
+    $('#locClose').onclick = () => { panel.hidden = true; locStore.set({ ...loc, dismissed: true }); };
+  };
+
+  const run = async (fromUser) => {
+    btn.classList.add('busy');
+    try {
+      const loc = await locate();
+      const prev = locStore.get();
+      // 같은 위치에서 이미 닫은 안내는 다시 띄우지 않는다
+      if (prev?.dismissed && prev.name === loc.name && prev.nx === loc.nx && prev.ny === loc.ny) loc.dismissed = true;
+      locStore.set(loc);
+      apply(loc, fromUser);
+    } catch (e) {
+      if (!fromUser) return;
+      say(e.code === 1
+        ? '위치 권한이 거부되었습니다. 주소창 왼쪽 <b>사이트 설정</b>에서 위치를 <b>허용</b>한 뒤 다시 눌러 주세요.'
+        : `현재 위치를 확인하지 못했습니다: ${esc(e.message)}`);
+    } finally {
+      btn.classList.remove('busy');
+    }
+  };
+
+  if (!('geolocation' in navigator)) { btn.disabled = true; return; }
+  btn.onclick = () => run(true);
+  apply(locStore.get(), false); // 저장된 위치를 먼저 보여 주고
+  // 이미 위치 권한을 허용했다면 열 때마다 조용히 다시 확인한다
+  navigator.permissions?.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') run(false); }).catch(() => {});
 }
 
 /* ---------- 동작: 펼치기, 캐러셀 점, 스크롤 효과 ---------- */

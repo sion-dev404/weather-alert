@@ -41,6 +41,8 @@ async function main() {
   ]);
 
   const data = buildSiteData({ items, tmnItems, midDays, now, location });
+  // 화면에서 사용자 위치(브라우저 위치정보)의 격자와 비교하기 위해 날씨 기준 격자를 함께 넣는다.
+  data.grid = { nx: Number(nx), ny: Number(ny) };
   await mkdir('site', { recursive: true });
   await writeFile('site/weather.json', JSON.stringify(data, null, 2), 'utf8');
   console.log(`site/weather.json 생성: 시간별 ${data.hourly.length}개, 일별 ${data.daily.length}일`);
