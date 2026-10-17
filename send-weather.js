@@ -31,7 +31,9 @@ async function main() {
 
   let ok = 0, total = 0, failedAreas = 0, quiet = 0;
   const expired = [];
-  for (const g of groups) {
+  // 공개 저장소라 Actions 로그도 공개된다. 기기 위치(격자·기온)는 로그에 남기지 않고 순번만 쓴다.
+  for (const [gi, g] of groups.entries()) {
+    const area = `동네 ${gi + 1}`;
     let summary;
     try {
       const { items, tmnItems } = await fetchShort({ serviceKey, nx: g.loc.nx, ny: g.loc.ny, now });
@@ -39,14 +41,14 @@ async function main() {
     } catch (e) {
       failedAreas++;
       total += g.targets.length;
-      console.warn(`격자 ${g.loc.nx},${g.loc.ny} 예보 실패 (기기 ${g.targets.length}대): ${e.message}`);
+      console.warn(`${area} 예보 실패 (기기 ${g.targets.length}대): ${e.message}`);
       continue;
     }
     // 매우 덥거나·춥거나·비/눈이 오는 날만 보낸다
     const reasons = alertReasons(summary);
     if (!reasons.length && !always) {
       quiet += g.targets.length;
-      console.log(`격자 ${g.loc.nx},${g.loc.ny}: 알릴 날씨 없음 (최저 ${summary.tmn}° / 최고 ${summary.tmx}°, 비·눈 없음) → 기기 ${g.targets.length}대 건너뜀`);
+      console.log(`${area}: 알릴 날씨 없음 → 기기 ${g.targets.length}대 건너뜀`);
       continue;
     }
     // 같은 격자라도 기기마다 자기 동 이름으로 제목을 단다
