@@ -30,6 +30,9 @@ export function validateSubscription(s) {
   return { endpoint: s.endpoint, expirationTime: s.expirationTime ?? null, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } };
 }
 
+/** 목록 항목: 예전 형식은 암호문 문자열, 지금은 { blob, by(등록한 GitHub 계정), at(등록일) } */
+export const entryBlob = (e) => (typeof e === 'string' ? e : e?.blob);
+
 export async function readSubsFile(file = SUBS_FILE) {
   try {
     const list = JSON.parse(await readFile(file, 'utf8'));
@@ -57,7 +60,7 @@ export async function loadSubscriptions({ env = process.env, file = SUBS_FILE } 
     out.push({ sub, blob });
   };
 
-  const blobs = await readSubsFile(file);
+  const blobs = (await readSubsFile(file)).map(entryBlob).filter(Boolean);
   if (blobs.length && !env.SUB_ENC_PRIVATE_KEY) console.warn('SUB_ENC_PRIVATE_KEY 가 없어 등록된 구독 파일을 읽지 못했습니다.');
   else for (const blob of blobs) {
     try { add(decryptSubscription(blob, env.SUB_ENC_PRIVATE_KEY), blob); } catch (e) { console.warn(`구독 1개 복호화 실패(무시): ${e.message}`); }
@@ -78,7 +81,7 @@ export async function loadSubscriptions({ env = process.env, file = SUBS_FILE } 
 export async function removeExpired(blobs, file = SUBS_FILE) {
   if (!blobs.length) return 0;
   const list = await readSubsFile(file);
-  const next = list.filter((b) => !blobs.includes(b));
+  const next = list.filter((e) => !blobs.includes(entryBlob(e)));
   if (next.length !== list.length) await writeSubsFile(next, file);
   return list.length - next.length;
 }

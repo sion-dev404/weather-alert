@@ -57,3 +57,36 @@ test('파일 구독 + 예전 Secret 구독을 합치고 endpoint 로 중복 제�
   assert.equal(await removeExpired([list[0].blob], file), 1);
   assert.equal((await readSubsFile(file)).length, 2);
 });
+
+test('새 목록 형식({ blob, by })과 예전 형식(문자열)을 함께 읽고 정리한다', async () => {
+  const { pub, priv } = keypair();
+  const encrypt = await pageEncryptor(pub);
+  const dir = await mkdtemp(join(tmpdir(), 'subs-'));
+  const file = join(dir, 'push-subscriptions.json');
+  const b1 = await encrypt(sub(1)), b2 = await encrypt(sub(2));
+  await writeFile(file, JSON.stringify([b1, { blob: b2, by: 'friend', at: '2026-10-17' }]));
+  const list = await loadSubscriptions({ env: { SUB_ENC_PRIVATE_KEY: priv }, file });
+  assert.equal(list.length, 2);
+  assert.equal(await removeExpired([b2], file), 1);
+  assert.deepEqual(await readSubsFile(file), [b1]);
+});
+
+test('다른 계정은 1인당 3대까지만 등록된다 (주인은 제한 없음)', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { pub, priv } = keypair();
+  const encrypt = await pageEncryptor(pub);
+  const dir = await mkdtemp(join(tmpdir(), 'subs-'));
+  const existing = [];
+  for (let i = 1; i <= 3; i++) existing.push({ blob: await encrypt(sub(i)), by: 'friend', at: '2026-10-17' });
+  await writeFile(join(dir, 'push-subscriptions.json'), JSON.stringify(existing));
+  const script = new URL('../scripts/add-subscription.js', import.meta.url);
+  const run = (author) => spawnSync(process.execPath, [script.pathname.replace(/^\/([A-Za-z]:)/, '$1')], {
+    cwd: dir, encoding: 'utf8',
+    env: { ...process.env, GITHUB_OUTPUT: '', ISSUE_AUTHOR: author, REPO_OWNER: 'owner', SUB_ENC_PRIVATE_KEY: priv, ISSUE_BODY: `SUB:${blob4}` },
+  });
+  const blob4 = await encrypt(sub(4));
+  const r = run('friend');
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /최대 3대/);
+  assert.equal((await readSubsFile(join(dir, 'push-subscriptions.json'))).length, 3); // 파일은 그대로
+});
