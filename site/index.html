@@ -2,44 +2,71 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2b6cb0" id="theme">
 <title>오늘의 날씨</title>
 <style>
   :root {
-    --bg1: #1e3a5f; --bg2: #0f1b2d; --card: rgba(255,255,255,.09); --line: rgba(255,255,255,.14);
-    --text: #f2f6fb; --sub: #b8c6d9; --accent: #7cc4ff; --warm: #ffb86b;
+    --bg-a: #3a7bd5; --bg-b: #1c3f78;
+    --card: rgba(255,255,255,.16); --line: rgba(255,255,255,.22);
+    --text: #fff; --sub: rgba(255,255,255,.78); --accent: #bfe3ff;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { background: var(--bg-b); }
   body {
-    margin: 0; min-height: 100vh; color: var(--text);
-    font-family: -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-    background: linear-gradient(180deg, var(--bg1), var(--bg2)) fixed;
+    margin: 0; min-height: 100vh; color: var(--text); font-weight: 700;
+    font-family: "Samsung Sans", "SamsungOne", -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%) fixed;
+    transition: background .6s;
   }
-  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 40px; }
-  .hero { text-align: center; padding: 24px 0 28px; }
-  .loc { color: var(--sub); font-size: 15px; }
-  .temp { font-size: 112px; font-weight: 200; line-height: 1; margin: 8px 0; letter-spacing: -4px; }
-  .cond { font-size: 22px; }
-  .range { color: var(--sub); margin-top: 6px; font-size: 16px; }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 16px; }
-  h2 { margin: 0 0 12px; font-size: 14px; color: var(--sub); font-weight: 600; }
-  .hourly { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
-  .h { flex: 0 0 56px; text-align: center; }
-  .h .t { font-size: 13px; color: var(--sub); }
-  .h .i { font-size: 24px; margin: 6px 0; }
-  .h .d { font-size: 17px; font-weight: 600; }
-  .h .p { font-size: 11px; color: var(--accent); min-height: 14px; margin-top: 2px; }
-  .day { display: grid; grid-template-columns: 52px 1fr auto 76px; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+  main { max-width: 560px; margin: 0 auto; padding: calc(20px + env(safe-area-inset-top)) 16px 40px; }
+
+  /* 상단: 위치 + 큰 기온 + 아이콘 */
+  .top { padding: 8px 8px 20px; }
+  .loc { font-size: 20px; display: flex; align-items: center; gap: 6px; }
+  .upd { font-size: 13px; color: var(--sub); font-weight: 600; margin-top: 4px; }
+  .now { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; }
+  .temp { font-size: 128px; line-height: .95; font-weight: 800; letter-spacing: -6px; }
+  .temp sup { font-size: 56px; vertical-align: top; letter-spacing: 0; position: relative; top: 8px; margin-left: 2px; }
+  .big-icon { font-size: 92px; line-height: 1; filter: drop-shadow(0 6px 14px rgba(0,0,0,.25)); }
+  .desc { font-size: 22px; margin-top: 10px; }
+  .range { font-size: 17px; color: var(--sub); margin-top: 4px; font-weight: 700; }
+
+  /* 카드 공통 */
+  section {
+    background: var(--card); border: 1px solid var(--line); border-radius: 26px;
+    padding: 18px 14px; margin-top: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  h2 { margin: 0 0 14px 6px; font-size: 16px; font-weight: 800; }
+
+  /* 시간별 */
+  .scroll { overflow-x: auto; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+  .hrow { position: relative; width: max-content; }
+  .hrow .cols { display: flex; }
+  .hc { width: 62px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .hc .t { font-size: 14px; color: var(--sub); }
+  .hc.cur .t { color: #fff; }
+  .hc .i { font-size: 28px; margin: 8px 0 2px; }
+  .hc .p { font-size: 12px; color: var(--accent); height: 15px; }
+  .hc .d { font-size: 17px; }
+  .graph { display: block; }
+
+  /* 주간 */
+  .day { display: grid; grid-template-columns: 58px 1fr 54px 92px; align-items: center; gap: 6px; padding: 12px 6px; border-top: 1px solid var(--line); }
   .day:first-of-type { border-top: 0; }
-  .day .n { font-weight: 600; }
-  .day .n small { display: block; color: var(--sub); font-weight: 400; font-size: 12px; }
-  .day .w { font-size: 20px; }
-  .day .w small { font-size: 12px; color: var(--sub); margin-left: 6px; }
-  .day .r { font-size: 12px; color: var(--accent); text-align: right; min-width: 36px; }
-  .day .m { text-align: right; font-variant-numeric: tabular-nums; }
-  .day .m b { color: var(--warm); font-weight: 600; }
-  .foot { text-align: center; color: var(--sub); font-size: 12px; margin-top: 20px; }
-  .err { text-align: center; padding: 60px 0; color: var(--sub); }
+  .day .n { font-size: 17px; }
+  .day .n small { display: block; font-size: 12px; color: var(--sub); font-weight: 600; margin-top: 1px; }
+  .day.today .n { color: #fff; }
+  .day .ic { display: flex; align-items: center; gap: 14px; font-size: 26px; }
+  .day .ic .arrow { font-size: 12px; color: var(--sub); }
+  .day .r { font-size: 14px; color: var(--accent); text-align: center; }
+  .day .m { text-align: right; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .day .m .lo { color: var(--sub); }
+  .day .m .sl { color: var(--sub); margin: 0 3px; font-weight: 600; }
+
+  .foot { text-align: center; color: var(--sub); font-size: 12px; font-weight: 600; margin-top: 22px; }
+  .err { text-align: center; padding: 80px 0; color: var(--sub); }
 </style>
 </head>
 <body>
@@ -48,41 +75,82 @@
 const $ = (s) => document.querySelector(s);
 const fmt = (v) => (v === null || v === undefined ? '-' : Math.round(v) + '°');
 const pop = (p) => (p === null || p === undefined ? '' : p + '%');
-const md = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`;
+const md = (d) => `${+d.slice(4, 6)}.${+d.slice(6, 8)}`;
+const pad2 = (n) => String(n).padStart(2, '0');
+
+// 날씨·시간대에 맞춰 배경 그라데이션을 바꾼다 (삼성 날씨처럼)
+function theme(cur) {
+  const night = cur && (cur.hour >= 19 || cur.hour < 6);
+  const t = cur?.text || '';
+  let a, b;
+  if (/비|소나기|눈/.test(t)) [a, b] = night ? ['#2c3e50', '#10161f'] : ['#5d7388', '#2c3a4a'];
+  else if (/흐림/.test(t))   [a, b] = night ? ['#3b4452', '#12161c'] : ['#7c8a99', '#44505e'];
+  else if (/구름/.test(t))   [a, b] = night ? ['#26406b', '#0c1424'] : ['#5b8fd0', '#2f5a96'];
+  else                       [a, b] = night ? ['#1d2f5c', '#070c1c'] : ['#3a8be8', '#1b4c9c'];
+  const r = document.documentElement.style;
+  r.setProperty('--bg-a', a); r.setProperty('--bg-b', b);
+  $('#theme').setAttribute('content', a);
+}
+
+// 시간별 기온 꺾은선 그래프(SVG)
+function graph(hourly, colW) {
+  const temps = hourly.map((h) => h.temp);
+  const lo = Math.min(...temps), hi = Math.max(...temps);
+  const H = 70, padY = 14, span = Math.max(hi - lo, 1);
+  const pts = hourly.map((h, i) => [i * colW + colW / 2, padY + (H - padY * 2) * (1 - (h.temp - lo) / span)]);
+  const line = pts.map((p) => p.join(',')).join(' ');
+  const dots = pts.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#fff"/>`).join('');
+  return `<svg class="graph" width="${colW * hourly.length}" height="${H}" viewBox="0 0 ${colW * hourly.length} ${H}">
+    <polyline points="${line}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
+}
 
 function render(d) {
   const cur = d.current;
   const rng = d.today_range;
-  const today = d.today;
-  const hours = d.hourly.map((h) => `
-    <div class="h">
-      <div class="t">${h.date === today ? '' : '내일 '}${String(h.hour).padStart(2, '0')}시</div>
+  theme(cur);
+
+  const COL = 62;
+  const cols = d.hourly.map((h, i) => `
+    <div class="hc${i === 0 ? ' cur' : ''}">
+      <div class="t">${i === 0 ? '지금' : (h.hour === 0 ? '내일' : pad2(h.hour) + '시')}</div>
       <div class="i">${h.icon}</div>
-      <div class="d">${fmt(h.temp)}</div>
       <div class="p">${h.pop ? pop(h.pop) : ''}</div>
+      <div class="d">${fmt(h.temp)}</div>
     </div>`).join('');
 
   const days = d.daily.map((x, i) => {
-    const same = x.am.text === x.pm.text;
+    const same = x.am.icon === x.pm.icon;
     return `
-    <div class="day">
-      <div class="n">${i === 0 ? '오늘' : x.dow}<small>${md(x.date)}</small></div>
-      <div class="w">${x.am.icon}${same ? '' : ' → ' + x.pm.icon}<small>${same ? x.am.text : x.am.text + ' → ' + x.pm.text}</small></div>
+    <div class="day${i === 0 ? ' today' : ''}">
+      <div class="n">${i === 0 ? '오늘' : x.dow + '요일'}<small>${md(x.date)}</small></div>
+      <div class="ic" title="${x.am.text}${same ? '' : ' → ' + x.pm.text}">
+        <span>${x.am.icon}</span>${same ? '' : '<span class="arrow">▶</span>'}${same ? '' : `<span>${x.pm.icon}</span>`}
+      </div>
       <div class="r">${pop(x.pop)}</div>
-      <div class="m">${fmt(x.tmn)} / <b>${fmt(x.tmx)}</b></div>
+      <div class="m"><span class="lo">${fmt(x.tmn)}</span><span class="sl">/</span>${fmt(x.tmx)}</div>
     </div>`;
   }).join('');
 
   $('#app').innerHTML = `
-    <div class="hero">
-      <div class="loc">${d.location || '오늘의 날씨'}</div>
-      <div class="temp">${cur ? fmt(cur.temp) : '-'}</div>
-      <div class="cond">${cur ? cur.icon + ' ' + cur.text : ''}</div>
-      <div class="range">최저 ${rng ? fmt(rng.tmn) : '-'} · 최고 ${rng ? fmt(rng.tmx) : '-'}</div>
+    <div class="top">
+      <div class="loc">📍 ${d.location || '내 지역'}</div>
+      <div class="upd">${d.updatedKst.slice(4, 6)}.${d.updatedKst.slice(6, 8)} ${d.updatedKst.slice(9)} 업데이트</div>
+      <div class="now">
+        <div class="temp">${cur ? Math.round(cur.temp) : '-'}<sup>°</sup></div>
+        <div class="big-icon">${cur ? cur.icon : ''}</div>
+      </div>
+      <div class="desc">${cur ? cur.text : ''}</div>
+      <div class="range">최저 ${rng ? fmt(rng.tmn) : '-'} / 최고 ${rng ? fmt(rng.tmx) : '-'}</div>
     </div>
-    <section><h2>시간별 예보</h2><div class="hourly">${hours}</div></section>
+    <section>
+      <h2>시간별 예보</h2>
+      <div class="scroll"><div class="hrow">
+        <div class="cols">${cols}</div>
+        ${graph(d.hourly, COL)}
+      </div></div>
+    </section>
     <section><h2>주간 예보</h2>${days}</section>
-    <div class="foot">기상청 예보 기준 · ${d.updatedKst} 갱신</div>`;
+    <div class="foot">기상청 예보 기준</div>`;
 }
 
 fetch('weather.json', { cache: 'no-store' })
