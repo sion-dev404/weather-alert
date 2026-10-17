@@ -1,43 +1,43 @@
-// 웹 푸시 전송 (web-push + VAPID). 구독 정보는 PUSH_SUBSCRIPTION 환경변수에 둔다.
-// PUSH_SUBSCRIPTION 은 구독 객체 하나 또는 여러 기기의 구독 배열(JSON)이다.
+// 웹 푸시 전송 (web-push + VAPID)
+// 구독 목록은 src/subs.js 가 만든다 (push-subscriptions.json + Secret PUSH_SUBSCRIPTION).
 import webpush from 'web-push';
+import { loadSubscriptions, removeExpired } from './subs.js';
 
 const PAGE_URL = 'https://sion-dev404.github.io/weather-alert/';
 
-export function parseSubscriptions(raw) {
-  if (!raw) throw new Error('PUSH_SUBSCRIPTION 환경변수가 없습니다.');
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error('PUSH_SUBSCRIPTION 이 올바른 JSON 이 아닙니다.');
-  }
-  const list = Array.isArray(parsed) ? parsed : [parsed];
-  if (!list.length || list.some((s) => !s?.endpoint || !s?.keys?.p256dh || !s?.keys?.auth)) {
-    throw new Error('PUSH_SUBSCRIPTION 에 endpoint/keys 가 빠진 구독이 있습니다.');
-  }
-  return list;
-}
-
-/** 모든 구독 기기에 알림을 보낸다. 하나라도 성공하면 성공, 전부 실패하면 오류. */
-export async function sendPush({ title, body, url = PAGE_URL }) {
-  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_SUBSCRIPTION } = process.env;
+function setVapid() {
+  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY 환경변수가 없습니다.');
   webpush.setVapidDetails(PAGE_URL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
-  const subs = parseSubscriptions(PUSH_SUBSCRIPTION);
+/** 구독 하나로 보낸다 (등록 확인 알림용) */
+export async function sendPushTo(sub, { title, body, url = PAGE_URL }) {
+  setVapid();
+  await webpush.sendNotification(sub, JSON.stringify({ title, body, url }), { TTL: 6 * 3600 });
+}
+
+/** 등록된 모든 기기에 보낸다. 하나라도 성공하면 성공, 전부 실패하면 오류. 만료된 구독은 파일에서 지운다. */
+export async function sendPush({ title, body, url = PAGE_URL }) {
+  setVapid();
+  const targets = await loadSubscriptions();
+  if (!targets.length) throw new Error('등록된 알림 기기가 없습니다. 페이지에서 "아침 알림 설정하기"를 눌러 주세요.');
+
   const payload = JSON.stringify({ title, body, url });
-  const results = await Promise.allSettled(subs.map((s) => webpush.sendNotification(s, payload, { TTL: 6 * 3600 })));
+  const results = await Promise.allSettled(targets.map((t) => webpush.sendNotification(t.sub, payload, { TTL: 6 * 3600 })));
 
+  const expired = [];
   results.forEach((r, i) => {
-    if (r.status === 'rejected') {
-      const code = r.reason?.statusCode;
-      // 404/410 은 브라우저에서 구독이 해지된 것. 다시 "알림 설정하기"로 구독해야 한다.
-      const hint = code === 404 || code === 410 ? ' (구독 만료: 페이지에서 알림을 다시 설정하세요)' : '';
-      console.warn(`기기 ${i + 1} 전송 실패: ${code ?? ''} ${r.reason?.message ?? r.reason}${hint}`);
-    }
+    if (r.status !== 'rejected') return;
+    const code = r.reason?.statusCode;
+    // 404/410 은 브라우저에서 구독이 해지된 것 (앱 삭제, 사이트 데이터 삭제 등)
+    if ((code === 404 || code === 410) && targets[i].blob) expired.push(targets[i].blob);
+    console.warn(`기기 ${i + 1} 전송 실패: ${code ?? ''} ${r.reason?.message ?? r.reason}`);
   });
+  const removed = await removeExpired(expired);
+  if (removed) console.log(`만료된 구독 ${removed}개를 목록에서 지웠습니다.`);
+
   const ok = results.filter((r) => r.status === 'fulfilled').length;
-  if (!ok) throw new Error(`모든 기기(${subs.length}대)에 푸시 전송 실패`);
-  return { ok, total: subs.length };
+  if (!ok) throw new Error(`모든 기기(${targets.length}대)에 푸시 전송 실패`);
+  return { ok, total: targets.length, removed };
 }

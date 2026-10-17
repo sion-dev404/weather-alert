@@ -6,6 +6,13 @@ on:
     - cron: '30 21 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write # 만료된 구독을 push-subscriptions.json 에서 지우고 커밋하기 위해
+
+concurrency:
+  group: subscriptions
+  cancel-in-progress: false
+
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -25,4 +32,12 @@ jobs:
           LOCATION_NAME: ${{ vars.LOCATION_NAME }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SUB_ENC_PRIVATE_KEY: ${{ secrets.SUB_ENC_PRIVATE_KEY }}
           PUSH_SUBSCRIPTION: ${{ secrets.PUSH_SUBSCRIPTION }}
+      - name: 만료된 구독 정리 커밋
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add push-subscriptions.json 2>/dev/null || true
+          git diff --cached --quiet || { git commit -m "만료된 알림 구독 정리"; git pull --rebase; git push; }

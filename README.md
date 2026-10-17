@@ -16,7 +16,8 @@
 | `LOCATION_NAME` | 지역명 (`location.json` 이 없을 때만 사용, 비면 자동 조회) |
 | `MID_LAND_REG_ID`, `MID_TA_REG_ID` | 중기예보 지역코드 (주간 날씨) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | 웹 푸시 VAPID 키 쌍 |
-| `PUSH_SUBSCRIPTION` | 알림 받을 기기의 구독 정보 (JSON, 여러 기기면 배열) |
+| `SUB_ENC_PRIVATE_KEY` | 알림 구독 암호문을 푸는 개인키 (공개키는 `site/index.html` 의 `SUB_ENC_PUBLIC_KEY`) |
+| `PUSH_SUBSCRIPTION` | (예전 방식, 선택) 평문 구독 JSON. 지금은 `push-subscriptions.json` 을 사용 |
 
 ### 위치 바꾸기 (`location.json`)
 날씨 기준 위치는 저장소의 `location.json` (`{"nx", "ny", "name"}`) 에 있습니다.
@@ -37,13 +38,17 @@ GitHub: 저장소 **Settings → Secrets and variables → Actions** 에 같은 
 ### 웹 푸시 알림 켜기
 1. 페이지 아래쪽 **아침 알림 설정하기** 를 누르고 알림을 허용합니다.
    (아이폰은 Safari 공유 → **홈 화면에 추가** 후, 홈 화면 아이콘으로 열어야 합니다.)
-2. **테스트 알림** 으로 알림이 뜨는지 확인합니다.
-3. **구독 정보 복사** 후 Secret `PUSH_SUBSCRIPTION` 에 저장합니다.
-   여러 기기에서 받으려면 `[{...}, {...}]` 처럼 배열로 넣습니다.
-4. 알림이 오지 않고 Actions 로그에 `404`/`410` 이 보이면 구독이 만료된 것이니 1~3을 다시 합니다.
+2. **이 기기 알림 등록하기** → GitHub 이슈 작성 화면에서 **Create** 를 누릅니다.
+3. `subscribe.yml` 이 구독을 `push-subscriptions.json` 에 추가·커밋하고, 그 기기로 "알림이 등록되었습니다" 알림을 보낸 뒤 이슈를 닫습니다.
+   저장소 주인이 쓴, 제목이 "알림 등록"으로 시작하는 이슈만 처리합니다.
+4. 기기마다 한 번만 하면 됩니다. 앱 삭제·사이트 데이터 삭제로 구독이 만료되면(404/410)
+   아침 알림을 보낼 때 목록에서 자동으로 지워지니, 그 기기에서 1~2를 다시 하면 됩니다.
 
-VAPID 키 쌍은 처음 한 번만 만듭니다. 바꾸면 기존 구독은 모두 다시 해야 하고,
-`site/index.html` 의 `VAPID_PUBLIC_KEY` 도 같이 바꿔야 합니다.
+공개 저장소라 구독 정보는 브라우저에서 암호화(ECDH P-256 + HKDF + AES-GCM)해서 올리고,
+이슈와 `push-subscriptions.json` 에는 암호문만 남습니다. 복호화는 Secret `SUB_ENC_PRIVATE_KEY` 로 Actions 에서만 합니다.
+
+VAPID 키 쌍과 구독 암호화 키 쌍은 처음 한 번만 만듭니다. 바꾸면 기존 구독은 모두 다시 해야 하고,
+`site/index.html` 의 `VAPID_PUBLIC_KEY` / `SUB_ENC_PUBLIC_KEY` 도 같이 바꿔야 합니다.
 
 ## 2. 지역코드 찾는 방법
 

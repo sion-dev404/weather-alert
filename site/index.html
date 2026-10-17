@@ -163,6 +163,9 @@
 <script>
 // 웹 푸시 공개키 (VAPID 공개키는 공개해도 되는 값)
 const VAPID_PUBLIC_KEY = 'BODcsz4QDVlouv3joGz86D2LKnAxR-hHRP7n3S0WNuNoiqFlke7JdJtIdynZ491m0Ihyh83ns92swAfjA63SMUg';
+// 구독 정보 암호화용 공개키 (복호화 키는 GitHub Secret SUB_ENC_PRIVATE_KEY 에만 있음)
+const SUB_ENC_PUBLIC_KEY = 'BObhzpKMmyqV4L46sV3REA1RcinKLD8Vx4Yu4KTbqY-W4k2gFHbAqP2ljzsOpmUvMUoUC4h4M46duq4JtlNunjI';
+const REPO_URL = 'https://github.com/sion-dev404/weather-alert';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -576,6 +579,25 @@ const b64ToBytes = (s) => {
   const b = atob((s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
   return Uint8Array.from(b, (c) => c.charCodeAt(0));
 };
+const bytesToB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+// 구독 정보를 공개키로 암호화한다 (ECDH P-256 + HKDF-SHA256 + AES-256-GCM).
+// 공개 저장소의 이슈·파일에는 이 암호문만 남고, Actions 만 Secret 으로 풀 수 있다.
+async function encryptSub(subJson) {
+  const s = crypto.subtle;
+  const server = await s.importKey('raw', b64ToBytes(SUB_ENC_PUBLIC_KEY), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const eph = await s.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const shared = await s.deriveBits({ name: 'ECDH', public: server }, eph.privateKey, 256);
+  const hkdf = await s.importKey('raw', shared, 'HKDF', false, ['deriveKey']);
+  const key = await s.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode('weather-alert-sub') },
+    hkdf, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await s.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(subJson)));
+  const box = { v: 1, epk: bytesToB64(await s.exportKey('raw', eph.publicKey)), iv: bytesToB64(iv), ct: bytesToB64(ct) };
+  return bytesToB64(new TextEncoder().encode(JSON.stringify(box)));
+}
+const SUB_KEY = 'weather-alert:sub-registered'; // 이 브라우저에서 등록 요청한 endpoint (편의용)
 
 async function setupNotify() {
   const btn = $('#notifyBtn'), panel = $('#notifyPanel'), label = btn.querySelector('span');
@@ -585,17 +607,20 @@ async function setupNotify() {
 
   const show = (html) => { panel.innerHTML = html; panel.hidden = false; };
 
-  // 구독 정보를 보여 주고 복사할 수 있게 한다 (GitHub Secret PUSH_SUBSCRIPTION에 붙여 넣는 용도)
-  const showSub = (sub) => {
-    show(`<b>알림이 켜졌습니다.</b><br>
-      아래 구독 정보를 복사해 GitHub 저장소의 <b>Settings → Secrets and variables → Actions</b>에
-      <b>PUSH_SUBSCRIPTION</b> 이름으로 저장하면 매일 아침 알림이 옵니다.
-      <textarea id="subText" readonly>${esc(JSON.stringify(sub))}</textarea>
-      <div class="row"><button id="copyBtn">구독 정보 복사</button><button id="testBtn">테스트 알림</button></div>`);
-    $('#copyBtn').onclick = async () => {
-      const t = $('#subText');
-      try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
-      $('#copyBtn').textContent = '복사했습니다';
+  const registered = (sub) => { try { return localStorage.getItem(SUB_KEY) === sub.endpoint; } catch { return false; } };
+
+  // 암호화한 구독으로 "알림 등록" 이슈 작성 화면을 연다. 제출하면 Actions(subscribe.yml)가 등록하고 확인 알림을 보낸다.
+  const showSub = async (sub) => {
+    const blob = await encryptSub(sub);
+    const body = `이 이슈를 제출하면 이 기기가 아침 날씨 알림 대상으로 등록됩니다. (구독 정보는 암호화되어 있습니다)\n\nSUB:${blob}`;
+    const url = `${REPO_URL}/issues/new?title=${encodeURIComponent('알림 등록')}&body=${encodeURIComponent(body)}`;
+    show(`<b>${registered(sub) ? '이 기기는 등록을 요청한 적이 있습니다.' : '알림 권한이 켜졌습니다.'}</b><br>
+      아래 <b>이 기기 알림 등록하기</b> → GitHub 창에서 <b>Create</b>만 누르면, 1~2분 뒤 "알림이 등록되었습니다" 알림이 옵니다.
+      알림이 안 오면 다시 등록하면 됩니다.
+      <div class="row" style="margin-top:12px"><button id="regBtn">이 기기 알림 등록하기</button><button id="testBtn">테스트 알림</button></div>`);
+    $('#regBtn').onclick = () => {
+      try { localStorage.setItem(SUB_KEY, sub.endpoint); } catch { /* 저장 불가 환경 무시 */ }
+      window.open(url, '_blank', 'noopener');
     };
     $('#testBtn').onclick = async () => {
       const reg = await navigator.serviceWorker.ready;
@@ -612,7 +637,7 @@ async function setupNotify() {
 
   const reg = await navigator.serviceWorker.register('sw.js');
   const existing = await reg.pushManager.getSubscription();
-  if (existing && Notification.permission === 'granted') label.textContent = '알림 켜짐 · 구독 정보 보기';
+  if (existing && Notification.permission === 'granted' && registered(existing)) label.textContent = '알림 켜짐 · 다시 등록하기';
 
   btn.onclick = async () => {
     if (Notification.permission === 'denied') {
@@ -628,8 +653,7 @@ async function setupNotify() {
       const ready = await navigator.serviceWorker.ready;
       const sub = (await ready.pushManager.getSubscription())
         || (await ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) }));
-      label.textContent = '알림 켜짐 · 구독 정보 보기';
-      showSub(sub.toJSON());
+      await showSub(sub.toJSON());
     } catch (e) {
       console.error(e);
       show(`알림 설정에 실패했습니다: ${esc(e.message)}`);
