@@ -38,7 +38,7 @@ async function main() {
 
   // 새로 등록한 기기로 확인 알림
   const where = loc?.name ? `${loc.name} 날씨로 ` : '';
-  await sendPushTo(sub, { title: '🔔 알림이 등록되었습니다', body: `매우 덥거나 춥거나 비·눈이 오는 날 아침에 이 기기로 ${where}알림이 옵니다. 1~2분 뒤 앱 화면도 이 위치로 바뀝니다.` });
+  await sendPushTo(sub, { title: '🔔 알림이 등록되었습니다', body: `덥거나 춥거나 비·눈이 오는 날 아침에 이 기기로 ${where}알림이 옵니다. 1~2분 뒤 앱 화면도 이 위치로 바뀝니다.` });
   console.log('확인 알림 전송 완료');
 }
 

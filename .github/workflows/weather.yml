@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       always:
-        description: '조건(매우 더움·추움·비/눈)과 관계없이 보내기 (시험용)'
+        description: '조건(더움·추움·비/눈)과 관계없이 보내기 (시험용)'
         type: boolean
         default: false
 

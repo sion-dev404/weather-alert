@@ -90,12 +90,12 @@ const skyLabel = (code) => (SKY[code] ? `${SKY[code].emoji} ${SKY[code].text}` :
 const popLabel = (p) => (p === null ? '-' : `${p}%`);
 
 /**
- * 아침 알림을 보낼 조건 (기상청 특보 기준 참고). 숫자를 바꾸면 기준이 바뀐다.
- * - 매우 더움: 최고기온 33°C 이상 (폭염주의보 기준)
- * - 매우 추움: 최저기온 -5°C 이하 또는 최고기온 0°C 이하
+ * 아침 알림을 보낼 조건 (사용자 지정 기준). 숫자를 바꾸면 기준이 바뀐다.
+ * - 더움: 최고기온 30°C 이상
+ * - 추움: 최저기온 18°C 이하 또는 최고기온 18°C 이하
  * - 비·눈: 오늘 예보에 강수 형태(비, 비/눈, 눈, 소나기)가 한 번이라도 있음
  */
-export const ALERT = { HOT_MAX: 33, COLD_MIN: -5, COLD_MAX: 0 };
+export const ALERT = { HOT_MAX: 30, COLD_MIN: 18, COLD_MAX: 18 };
 
 /** 오늘 알림을 보낼 이유 목록. 비어 있으면 알림을 보내지 않는다. */
 export function alertReasons(s, t = ALERT) {
@@ -105,10 +105,10 @@ export function alertReasons(s, t = ALERT) {
     reasons.push({ kind: 'rain', emoji: snow ? '❄️' : '☂️', text: `${s.ptyCodes.map((c) => PTY[c].text).join('·')} 예보` });
   }
   if (s.tmx !== null && s.tmx >= t.HOT_MAX) {
-    reasons.push({ kind: 'hot', emoji: '🥵', text: `매우 더움` });
+    reasons.push({ kind: 'hot', emoji: '🥵', text: `더움` });
   }
   if ((s.tmn !== null && s.tmn <= t.COLD_MIN) || (s.tmx !== null && s.tmx <= t.COLD_MAX)) {
-    reasons.push({ kind: 'cold', emoji: '🥶', text: `매우 추움` });
+    reasons.push({ kind: 'cold', emoji: '🥶', text: `추움` });
   }
   return reasons;
 }

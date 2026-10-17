@@ -62,17 +62,21 @@ test('요약: 강수 없으면 우산 문구 없음', () => {
   assert.match(msg, /맑음/);
 });
 
-test('알림 조건: 매우 더움·매우 추움·비/눈일 때만', async () => {
+test('알림 조건: 더움(최고 30°↑)·추움(최저 또는 최고 18°↓)·비/눈일 때만', async () => {
   const { alertReasons, formatPush } = await import('../src/summary.js');
-  const base = { tmn: 12, tmx: 24, popAm: 10, popPm: 20, skyAm: 1, skyPm: 1, ptyCodes: [], hourlyTemps: [] };
+  const base = { tmn: 20, tmx: 26, popAm: 10, popPm: 20, skyAm: 1, skyPm: 1, ptyCodes: [], hourlyTemps: [] };
   const kinds = (s) => alertReasons({ ...base, ...s }).map((r) => r.kind);
-  assert.deepEqual(kinds({}), []); // 평범한 날은 보내지 않음
-  assert.deepEqual(kinds({ tmx: 33 }), ['hot']);
-  assert.deepEqual(kinds({ tmx: 32 }), []);
-  assert.deepEqual(kinds({ tmn: -5 }), ['cold']);
-  assert.deepEqual(kinds({ tmn: -4, tmx: 0 }), ['cold']); // 낮에도 영하
+  assert.deepEqual(kinds({}), []); // 19~29° 사이의 평범한 날은 보내지 않음
+  assert.deepEqual(kinds({ tmx: 30 }), ['hot']);
+  assert.deepEqual(kinds({ tmx: 29 }), []);
+  assert.deepEqual(kinds({ tmn: 18 }), ['cold']); // 아침 최저 18°
+  assert.deepEqual(kinds({ tmn: 19 }), []);
+  assert.deepEqual(kinds({ tmn: 10, tmx: 25 }), ['cold']); // 오늘(10/17) 같은 날
+  assert.deepEqual(kinds({ tmn: 17, tmx: 31 }), ['hot', 'cold']); // 일교차가 큰 날은 둘 다
   assert.deepEqual(kinds({ ptyCodes: [1] }), ['rain']);
   assert.deepEqual(kinds({ ptyCodes: [3], tmn: -8, tmx: -1 }), ['rain', 'cold']);
   const msg = formatPush({ ...base, ptyCodes: [1] }, '20261017', '중앙동', alertReasons({ ...base, ptyCodes: [1] }));
-  assert.equal(msg.title, '☂️ 중앙동 비 예보 · 12° / 24°');
+  assert.equal(msg.title, '☂️ 중앙동 비 예보 · 20° / 26°');
+  const cold = { ...base, tmn: 10, tmx: 25 };
+  assert.equal(formatPush(cold, '20261017', '중앙동', alertReasons(cold)).title, '🥶 중앙동 추움 · 10° / 25°');
 });

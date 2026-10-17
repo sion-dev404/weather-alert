@@ -48,7 +48,7 @@ GitHub: 저장소 **Settings → Secrets and variables → Actions** 에 같은 
 
 ### 아침 알림 조건
 매일 KST 06:30 에 확인해서, 그 동네가 아래 중 하나일 때만 보낸다 (기준 숫자: `src/summary.js` 의 `ALERT`).
-- 매우 더움: 최고기온 33°C 이상 / 매우 추움: 최저기온 -5°C 이하 또는 최고기온 0°C 이하
+- 더움: 최고기온 30°C 이상 / 추움: 최저기온 18°C 이하 또는 최고기온 18°C 이하
 - 비·눈: 오늘 예보에 비·비/눈·눈·소나기가 있음
 
 시험할 때는 Actions → Morning Weather → Run workflow 에서 **조건과 관계없이 보내기** 를 켜거나,
