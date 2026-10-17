@@ -8,7 +8,8 @@ import { decryptSubscription, loadSubscriptions, removeExpired, readSubsFile } f
 
 // 페이지(site/index.html)의 실제 암호화 코드를 꺼내 Node 의 WebCrypto 로 실행한다.
 async function pageEncryptor(publicKey) {
-  const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
+  // 윈도우에서 git 이 CRLF 로 체크아웃해도 같은 정규식이 맞도록 줄바꿈을 LF 로 맞춘다
+  const html = (await readFile(new URL('../site/index.html', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const pick = (re) => html.match(re)[0];
   const src = [
     pick(/const b64ToBytes = [\s\S]*?\n};\n/),

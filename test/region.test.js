@@ -17,7 +17,7 @@ test('격자 → 중기예보 권역: 성남 중앙동(63,124)은 수도권, 부
 });
 
 async function pageEncryptor(publicKey) {
-  const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
+  const html = (await readFile(new URL('../site/index.html', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const pick = (re) => html.match(re)[0];
   const src = [pick(/const b64ToBytes = [\s\S]*?\n};\n/), pick(/const bytesToB64 = .*\n/), pick(/async function encryptSub[\s\S]*?\n}\n/)].join('\n');
   return new Function('SUB_ENC_PUBLIC_KEY', `${src}\nreturn encryptSub;`)(publicKey);
