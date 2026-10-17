@@ -12,11 +12,18 @@
 | 이름 | 설명 |
 |---|---|
 | `KMA_SERVICE_KEY` | 공공데이터포털 인증키 (단기·중기 공용) |
-| `NX`, `NY` | 단기예보 격자 좌표 |
-| `LOCATION_NAME` | 화면·알림에 표시할 지역명 (GitHub 에서는 Variables 에 등록) |
+| `NX`, `NY` | 단기예보 격자 좌표 (`location.json` 이 없을 때만 사용) |
+| `LOCATION_NAME` | 지역명 (`location.json` 이 없을 때만 사용, 비면 자동 조회) |
 | `MID_LAND_REG_ID`, `MID_TA_REG_ID` | 중기예보 지역코드 (주간 날씨) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | 웹 푸시 VAPID 키 쌍 |
 | `PUSH_SUBSCRIPTION` | 알림 받을 기기의 구독 정보 (JSON, 여러 기기면 배열) |
+
+### 위치 바꾸기 (`location.json`)
+날씨 기준 위치는 저장소의 `location.json` (`{"nx", "ny", "name"}`) 에 있습니다.
+1. 페이지 왼쪽 위 **지역명** 을 누르고 위치 권한을 허용합니다.
+2. 기준 위치와 다르면 **이 위치로 바꾸기** → GitHub 이슈 작성 화면에서 **Create** 를 누릅니다.
+3. `location.yml` 이 값을 검사해 `location.json` 을 커밋하고, 페이지를 다시 배포한 뒤 이슈를 닫습니다 (2~3분).
+   저장소 주인이 쓴, 제목이 "위치 변경"으로 시작하는 이슈만 처리합니다.
 
 로컬: `.env.example` 을 `.env` 로 복사해서 값을 채웁니다. (`.env` 는 `.gitignore` 에 포함)
 GitHub: 저장소 **Settings → Secrets and variables → Actions** 에 같은 이름으로 등록합니다.
