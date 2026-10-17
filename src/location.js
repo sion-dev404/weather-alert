@@ -1,5 +1,36 @@
-// 지역명 자동 조회: 기상청 격자(NX, NY) → 위경도 → OpenStreetMap 역지오코딩(동 이름)
-// LOCATION_NAME 을 직접 넣으면 그 값을 우선 사용한다.
+// 위치 설정과 지역명 조회
+// - 위치는 저장소의 location.json 을 우선 사용한다 (페이지의 "이 위치로 바꾸기" → GitHub 이슈 → Actions 가 갱신).
+// - location.json 이 없으면 환경변수 NX, NY, LOCATION_NAME 을 쓴다.
+// - 지역명이 비어 있으면 격자(NX, NY) → 위경도 → OpenStreetMap 역지오코딩으로 동 이름을 찾는다.
+import { readFile } from 'node:fs/promises';
+
+/** 위치 값 검사. { NX, NY, LOCATION_NAME } 또는 { nx, ny, name } 형식을 받는다. */
+export function validateLocation(raw) {
+  const nx = Number(raw?.nx ?? raw?.NX);
+  const ny = Number(raw?.ny ?? raw?.NY);
+  const name = String(raw?.name ?? raw?.LOCATION_NAME ?? '').trim();
+  // 기상청 단기예보 격자 범위: X 1~149, Y 1~253
+  if (!Number.isInteger(nx) || nx < 1 || nx > 149) throw new Error(`NX 값이 올바르지 않습니다: ${raw?.nx ?? raw?.NX}`);
+  if (!Number.isInteger(ny) || ny < 1 || ny > 253) throw new Error(`NY 값이 올바르지 않습니다: ${raw?.ny ?? raw?.NY}`);
+  if (name.length > 20 || (name && !/^[\p{L}\p{N} ·.\-]+$/u.test(name))) throw new Error(`지역명이 올바르지 않습니다: ${name}`);
+  return { nx, ny, name };
+}
+
+/** location.json → 없으면 환경변수. 지역명이 없으면 조회한다. */
+export async function loadLocation({ env = process.env, file = 'location.json' } = {}) {
+  let cfg = null;
+  try {
+    cfg = validateLocation(JSON.parse(await readFile(file, 'utf8')));
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.warn(`${file} 무시 (환경변수 사용): ${e.message}`);
+  }
+  const nx = cfg?.nx ?? env.NX;
+  const ny = cfg?.ny ?? env.NY;
+  if (!nx || !ny) throw new Error('위치가 없습니다: location.json 또는 NX/NY 환경변수가 필요합니다.');
+  // location.json 이 있으면 그 이름만 쓴다 (예전 위치의 LOCATION_NAME 이 섞이지 않도록)
+  const name = await resolveLocationName({ name: cfg ? cfg.name : env.LOCATION_NAME, nx, ny });
+  return { nx: String(nx), ny: String(ny), name };
+}
 
 // 기상청 단기예보 격자 (Lambert Conformal Conic) 상수
 const RE = 6371.00877; // 지구 반경(km)

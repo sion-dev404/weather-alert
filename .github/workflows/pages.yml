@@ -6,7 +6,7 @@ on:
     - cron: '20 */3 * * *'
   push:
     branches: [main]
-    paths: ['site/**', 'src/**', 'build-site.js', '.github/workflows/pages.yml']
+    paths: ['site/**', 'src/**', 'build-site.js', 'location.json', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:

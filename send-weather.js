@@ -4,7 +4,7 @@ import { fetchVilageFcst } from './src/kma.js';
 import { getLatestVilageBase, getTodayTmnBase, getTodayKst } from './src/kst.js';
 import { summarizeToday, formatPush } from './src/summary.js';
 import { sendPush } from './src/push.js';
-import { resolveLocationName } from './src/location.js';
+import { loadLocation } from './src/location.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -14,8 +14,9 @@ function requireEnv(...names) {
 }
 
 async function main() {
-  requireEnv('KMA_SERVICE_KEY', 'NX', 'NY');
-  const { KMA_SERVICE_KEY: serviceKey, NX: nx, NY: ny, LOCATION_NAME } = process.env;
+  requireEnv('KMA_SERVICE_KEY');
+  const { KMA_SERVICE_KEY: serviceKey } = process.env;
+  const { nx, ny, name: location } = await loadLocation();
   const now = new Date();
   const today = getTodayKst(now);
 
@@ -24,7 +25,7 @@ async function main() {
   // 최신 발표분이 이미 02시 발표분이면 한 번만 조회한다.
   const sameAsLatest = tmnBase && tmnBase.baseDate === latest.baseDate && tmnBase.baseTime === latest.baseTime;
 
-  const [items, tmnItems, location] = await Promise.all([
+  const [items, tmnItems] = await Promise.all([
     fetchVilageFcst({ serviceKey, nx, ny, ...latest }),
     tmnBase && !sameAsLatest
       ? fetchVilageFcst({ serviceKey, nx, ny, ...tmnBase }).catch((e) => {
@@ -33,7 +34,6 @@ async function main() {
           return [];
         })
       : [],
-    resolveLocationName({ name: LOCATION_NAME, nx, ny }),
   ]);
 
   const message = formatPush(summarizeToday(items, today, tmnItems), today, location);

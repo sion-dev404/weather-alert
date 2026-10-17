@@ -5,7 +5,7 @@ import { fetchVilageFcst } from './src/kma.js';
 import { fetchMidDays } from './src/mid.js';
 import { getLatestVilageBase, getTodayTmnBase } from './src/kst.js';
 import { buildSiteData } from './src/forecast.js';
-import { resolveLocationName } from './src/location.js';
+import { loadLocation } from './src/location.js';
 
 function requireEnv(...names) {
   const missing = names.filter((n) => !process.env[n]);
@@ -13,15 +13,16 @@ function requireEnv(...names) {
 }
 
 async function main() {
-  requireEnv('KMA_SERVICE_KEY', 'NX', 'NY');
-  const { KMA_SERVICE_KEY: serviceKey, NX: nx, NY: ny, MID_LAND_REG_ID, MID_TA_REG_ID, LOCATION_NAME } = process.env;
+  requireEnv('KMA_SERVICE_KEY');
+  const { KMA_SERVICE_KEY: serviceKey, MID_LAND_REG_ID, MID_TA_REG_ID } = process.env;
+  const { nx, ny, name: location } = await loadLocation();
   const now = new Date();
 
   const latest = getLatestVilageBase(now);
   const tmnBase = getTodayTmnBase(now);
   const sameAsLatest = tmnBase && tmnBase.baseDate === latest.baseDate && tmnBase.baseTime === latest.baseTime;
 
-  const [items, tmnItems, midDays, location] = await Promise.all([
+  const [items, tmnItems, midDays] = await Promise.all([
     fetchVilageFcst({ serviceKey, nx, ny, ...latest }),
     tmnBase && !sameAsLatest
       ? fetchVilageFcst({ serviceKey, nx, ny, ...tmnBase }).catch((e) => {
@@ -36,8 +37,6 @@ async function main() {
           return [];
         })
       : [],
-    // LOCATION_NAME 이 비어 있으면 격자 좌표로 지역명을 조회한다.
-    resolveLocationName({ name: LOCATION_NAME, nx, ny }),
   ]);
 
   const data = buildSiteData({ items, tmnItems, midDays, now, location });

@@ -1,0 +1,56 @@
+name: Change Location
+
+# 날씨 페이지의 "이 위치로 바꾸기" → 제목이 "위치 변경"으로 시작하는 이슈 작성
+# → location.json 갱신·커밋 → 페이지 다시 배포 → 이슈 닫기
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+jobs:
+  update:
+    # 저장소 주인이 쓴 위치 변경 이슈만 처리한다.
+    if: github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, '위치 변경')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: location.json 갱신
+        id: loc
+        run: node scripts/set-location.js
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+      - name: 커밋·푸시
+        env:
+          LOC_NAME: ${{ steps.loc.outputs.name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add location.json
+          if git diff --cached --quiet; then
+            echo "위치 변화 없음"
+          else
+            git commit -m "위치 변경: $LOC_NAME"
+            git push
+          fi
+      # GITHUB_TOKEN 으로 한 push 는 다른 워크플로를 깨우지 않으므로 직접 실행한다.
+      - name: 날씨 페이지 다시 배포
+        run: gh workflow run pages.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: 이슈 닫기
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOC_NAME: ${{ steps.loc.outputs.name }}
+        run: gh issue close ${{ github.event.issue.number }} --repo ${{ github.repository }} --comment "위치를 '$LOC_NAME'(으)로 바꿨습니다. 2~3분 뒤 페이지와 다음 아침 알림에 반영됩니다."
+      - name: 실패 안내
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "위치 변경에 실패했습니다. Actions 로그를 확인해 주세요."

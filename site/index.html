@@ -504,17 +504,15 @@ function setupLocation(d) {
     const needRegister = !sameGrid || loc.name !== d.location;
     if (!needRegister || (loc.dismissed && !fromUser)) { panel.hidden = true; return; }
 
-    const text = JSON.stringify({ NX: loc.nx, NY: loc.ny, LOCATION_NAME: loc.name });
+    // 위치가 채워진 GitHub 이슈 작성 화면을 연다. 제출하면 Actions(location.yml)가 location.json 을 바꾸고 다시 배포한다.
+    const body = `이 이슈를 제출하면 날씨와 아침 알림의 기준 위치가 바뀝니다.\n\n${JSON.stringify({ NX: loc.nx, NY: loc.ny, LOCATION_NAME: loc.name })}`;
+    const issueUrl = `https://github.com/sion-dev404/weather-alert/issues/new?title=${encodeURIComponent(`위치 변경: ${loc.name}`)}&body=${encodeURIComponent(body)}`;
     say(`<b>현재 위치: ${esc(loc.name)}</b><br>${sameGrid
-      ? '날씨 기준 지역은 같습니다. 아침 알림 제목에도 이 이름이 나오게 하려면 아래 내용을 복사해 등록하세요.'
-      : `지금 보이는 날씨는 다른 지역(${esc(d.location || '기존 지역')}) 기준입니다. 이 위치의 날씨를 받으려면 아래 내용을 복사해 등록하세요.`}
-      <textarea id="locText" readonly>${esc(text)}</textarea>
-      <div class="row"><button id="locCopy">위치 정보 복사</button><button id="locClose">닫기</button></div>`);
-    $('#locCopy').onclick = async () => {
-      const t = $('#locText');
-      try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
-      $('#locCopy').textContent = '복사했습니다';
-    };
+      ? '날씨 기준 지역은 같습니다. 아침 알림 제목에도 이 이름을 쓰려면 바꾸기를 누르세요.'
+      : `지금 보이는 날씨는 다른 지역(${esc(d.location || '기존 지역')}) 기준입니다.`}
+      <br>GitHub 창에서 <b>Create(Submit)</b>만 누르면 2~3분 뒤 날씨와 알림이 이 위치로 바뀝니다.
+      <div class="row" style="margin-top:12px"><button id="locGo">이 위치로 바꾸기</button><button id="locClose">닫기</button></div>`);
+    $('#locGo').onclick = () => { window.open(issueUrl, '_blank', 'noopener'); };
     $('#locClose').onclick = () => { panel.hidden = true; locStore.set({ ...loc, dismissed: true }); };
   };
 
