@@ -4,6 +4,7 @@ import { fetchVilageFcst } from './src/kma.js';
 import { getLatestVilageBase, getTodayTmnBase, getTodayKst } from './src/kst.js';
 import { summarizeToday, formatPush } from './src/summary.js';
 import { sendPush } from './src/push.js';
+import { resolveLocationName } from './src/location.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -23,7 +24,7 @@ async function main() {
   // 최신 발표분이 이미 02시 발표분이면 한 번만 조회한다.
   const sameAsLatest = tmnBase && tmnBase.baseDate === latest.baseDate && tmnBase.baseTime === latest.baseTime;
 
-  const [items, tmnItems] = await Promise.all([
+  const [items, tmnItems, location] = await Promise.all([
     fetchVilageFcst({ serviceKey, nx, ny, ...latest }),
     tmnBase && !sameAsLatest
       ? fetchVilageFcst({ serviceKey, nx, ny, ...tmnBase }).catch((e) => {
@@ -32,9 +33,10 @@ async function main() {
           return [];
         })
       : [],
+    resolveLocationName({ name: LOCATION_NAME, nx, ny }),
   ]);
 
-  const message = formatPush(summarizeToday(items, today, tmnItems), today, LOCATION_NAME ?? '');
+  const message = formatPush(summarizeToday(items, today, tmnItems), today, location);
 
   if (dryRun) {
     console.log(`${message.title}\n${message.body}`);

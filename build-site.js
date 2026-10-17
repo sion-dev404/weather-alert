@@ -5,6 +5,7 @@ import { fetchVilageFcst } from './src/kma.js';
 import { fetchMidDays } from './src/mid.js';
 import { getLatestVilageBase, getTodayTmnBase } from './src/kst.js';
 import { buildSiteData } from './src/forecast.js';
+import { resolveLocationName } from './src/location.js';
 
 function requireEnv(...names) {
   const missing = names.filter((n) => !process.env[n]);
@@ -20,7 +21,7 @@ async function main() {
   const tmnBase = getTodayTmnBase(now);
   const sameAsLatest = tmnBase && tmnBase.baseDate === latest.baseDate && tmnBase.baseTime === latest.baseTime;
 
-  const [items, tmnItems, midDays] = await Promise.all([
+  const [items, tmnItems, midDays, location] = await Promise.all([
     fetchVilageFcst({ serviceKey, nx, ny, ...latest }),
     tmnBase && !sameAsLatest
       ? fetchVilageFcst({ serviceKey, nx, ny, ...tmnBase }).catch((e) => {
@@ -35,9 +36,11 @@ async function main() {
           return [];
         })
       : [],
+    // LOCATION_NAME 이 비어 있으면 격자 좌표로 지역명을 조회한다.
+    resolveLocationName({ name: LOCATION_NAME, nx, ny }),
   ]);
 
-  const data = buildSiteData({ items, tmnItems, midDays, now, location: LOCATION_NAME ?? '' });
+  const data = buildSiteData({ items, tmnItems, midDays, now, location });
   await mkdir('site', { recursive: true });
   await writeFile('site/weather.json', JSON.stringify(data, null, 2), 'utf8');
   console.log(`site/weather.json 생성: 시간별 ${data.hourly.length}개, 일별 ${data.daily.length}일`);
